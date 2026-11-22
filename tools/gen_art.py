@@ -197,23 +197,24 @@ def bed(name, blanket, messy, sleeper=None):
     box(dr, ox, oy, 0.05, 0.05, 0.9, 0.9, 8, (120, 80, 50, 255))           # frame
     box(dr, ox, oy, 0.08, 0.08, 0.84, 0.84, 4, (245, 245, 240, 255), lift=8)  # mattress
     if messy:
-        diamond(dr, ox, oy, 0.25, 0.1, 0.6, 0.8, shade(blanket, 0.9), lift=12)
-        diamond(dr, ox, oy, 0.5, 0.15, 0.35, 0.5, shade(blanket, 0.7), lift=13)
-        p = iso(0.2, 0.6, ox, oy - 12)
+        diamond(dr, ox, oy, 0.1, 0.25, 0.8, 0.6, shade(blanket, 0.9), lift=12)
+        diamond(dr, ox, oy, 0.15, 0.5, 0.5, 0.35, shade(blanket, 0.7), lift=13)
+        p = iso(0.6, 0.2, ox, oy - 12)
         dr.ellipse([p[0] - 6, p[1] - 3, p[0] + 4, p[1] + 2], fill=(240, 240, 235, 255))
         # clothes on the floor
         for (gx, gy, col) in [(0.9, 0.95, (70, 110, 200, 255)), (0.1, 1.0, (220, 90, 70, 255))]:
             p = iso(gx, gy, ox, oy)
             dr.rectangle([p[0] - 4, p[1] - 2, p[0] + 3, p[1] + 1], fill=col)
     else:
-        diamond(dr, ox, oy, 0.35, 0.08, 0.57, 0.84, blanket, lift=12)
-        diamond(dr, ox, oy, 0.08, 0.15, 0.25, 0.7, (250, 250, 250, 255), lift=13)
+        # head of the bed against the back (window) wall, foot toward the door side
+        diamond(dr, ox, oy, 0.08, 0.35, 0.84, 0.57, blanket, lift=12)
+        diamond(dr, ox, oy, 0.15, 0.08, 0.7, 0.25, (250, 250, 250, 255), lift=13)
     if sleeper:
         skin, hair = sleeper
         # a body-shaped lump under the blanket, and a head on the pillow
-        diamond(dr, ox, oy, 0.4, 0.3, 0.5, 0.4, shade(blanket, 1.15), lift=15)
-        diamond(dr, ox, oy, 0.45, 0.35, 0.35, 0.3, shade(blanket, 1.3), lift=17)
-        p = iso(0.22, 0.5, ox, oy - 15)
+        diamond(dr, ox, oy, 0.3, 0.4, 0.4, 0.5, shade(blanket, 1.15), lift=15)
+        diamond(dr, ox, oy, 0.35, 0.45, 0.3, 0.35, shade(blanket, 1.3), lift=17)
+        p = iso(0.5, 0.22, ox, oy - 15)
         dr.ellipse([p[0] - 5, p[1] - 4, p[0] + 5, p[1] + 3], fill=skin + (255,))
         dr.ellipse([p[0] - 6, p[1] - 5, p[0] + 1, p[1] + 2], fill=hair + (255,))
     save(img, name)
