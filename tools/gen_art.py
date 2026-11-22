@@ -181,7 +181,7 @@ def desk():
     save(img, "desk")
 
 
-def bed(name, blanket, messy):
+def bed(name, blanket, messy, sleeper=None):
     img, dr, ox, oy = canvas(1, 1, 18)
     box(dr, ox, oy, 0.05, 0.05, 0.9, 0.9, 8, (120, 80, 50, 255))           # frame
     box(dr, ox, oy, 0.08, 0.08, 0.84, 0.84, 4, (245, 245, 240, 255), lift=8)  # mattress
@@ -197,6 +197,14 @@ def bed(name, blanket, messy):
     else:
         diamond(dr, ox, oy, 0.35, 0.08, 0.57, 0.84, blanket, lift=12)
         diamond(dr, ox, oy, 0.08, 0.15, 0.25, 0.7, (250, 250, 250, 255), lift=13)
+    if sleeper:
+        skin, hair = sleeper
+        # a body-shaped lump under the blanket, and a head on the pillow
+        diamond(dr, ox, oy, 0.4, 0.3, 0.5, 0.4, shade(blanket, 1.15), lift=15)
+        diamond(dr, ox, oy, 0.45, 0.35, 0.35, 0.3, shade(blanket, 1.3), lift=17)
+        p = iso(0.22, 0.5, ox, oy - 15)
+        dr.ellipse([p[0] - 5, p[1] - 4, p[0] + 5, p[1] + 3], fill=skin + (255,))
+        dr.ellipse([p[0] - 6, p[1] - 5, p[0] + 1, p[1] + 2], fill=hair + (255,))
     save(img, name)
 
 
@@ -273,6 +281,7 @@ def ice_machine():
 desk()
 bed("bed_clean", (70, 120, 190, 255), False)
 bed("bed_messy", (70, 120, 190, 255), True)
+bed("bed_sleeping", (70, 120, 190, 255), False, ((220, 170, 130), (70, 50, 36)))
 car("car_red", (200, 60, 60, 255))
 car("car_blue", (60, 100, 200, 255))
 car("car_green", (70, 160, 90, 255))
@@ -386,8 +395,9 @@ def icon():
     save(img, "icon")
 
 
-def window_lit():
-    """Same canvas as room_shell: the back window with the lights on and curtains half drawn."""
+def window_lit(closed=False):
+    """Same canvas as room_shell: the back window with the lights on and curtains half drawn,
+    or (closed) lights off with the curtains shut for the night."""
     img, dr, ox, oy = canvas(2, 2, WALL_H)
     x0, y0 = iso(1, 0, ox, oy)
     frame = (90, 70, 50, 255)
@@ -398,8 +408,13 @@ def window_lit():
         # vertical strips that follow the wall's slope (y rises 1px per 2px of x)
         dr.polygon([(x0 + a, y0 - 41 + (a + 12) // 2), (x0 + b, y0 - 41 + (b + 12) // 2),
                     (x0 + b, y0 - 19 + (b + 12) // 2), (x0 + a, y0 - 19 + (a + 12) // 2)], fill=curtain)
+    if closed:
+        dr.polygon([(x0 - 11, y0 - 18), (x0 + 11, y0 - 7), (x0 + 11, y0 - 30), (x0 - 11, y0 - 41)],
+                   fill=(110, 52, 60, 255))
+        for a in (-6, 0, 6):
+            dr.line([(x0 + a, y0 - 38 + (a + 12) // 2), (x0 + a, y0 - 19 + (a + 12) // 2)], fill=(88, 40, 48, 255))
     dr.line([(x0, y0 - 12), (x0, y0 - 36)], fill=frame)
-    save(img, "window_lit")
+    save(img, "window_closed" if closed else "window_lit")
 
 
 def luggage(kind):
@@ -433,6 +448,7 @@ def luggage(kind):
 
 icon()
 window_lit()
+window_lit(closed=True)
 for k in ("budget", "business", "family"):
     luggage(k)
 print("art written to", os.path.abspath(OUT))

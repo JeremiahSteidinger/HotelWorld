@@ -165,14 +165,21 @@ func _process(_delta: float) -> void:
 func _sync_rooms() -> void:
 	_sign.texture = tex("sign" if sim.has_vacancy() else "sign_full")
 	for r in sim.rooms:
-		for bed in _beds[r.index]:
-			bed.texture = tex("bed_messy" if r.state == "dirty" else "bed_clean")
 		var g = sim.guests.get(r.guest_id) if r.guest_id != -1 else null
+		var asleep: bool = g != null and g.state == "staying" and g.asleep
+		var room_beds: Array = _beds[r.index]
+		for b in room_beds.size():
+			var t := "bed_messy" if r.state == "dirty" else "bed_clean"
+			# The sleeper takes the main bed (last); in a double, a family's kid takes the other one.
+			if asleep and (b == room_beds.size() - 1 or g.archetype == "family"):
+				t = "bed_sleeping"
+			room_beds[b].texture = tex(t)
 		var has_guest: bool = g != null and g.state in ["staying", "to_room", "waiting_room"]
 		_cars[r.index].visible = has_guest and g.archetype != "budget"
 		# Moved in: lights on, curtains drawn, bags on the floor.
 		var moved_in: bool = r.state == "occupied" and g != null and g.state == "staying"
 		_windows[r.index].visible = moved_in
+		_windows[r.index].texture = tex("window_closed" if asleep else "window_lit")
 		_luggage[r.index].visible = moved_in
 		if moved_in:
 			_luggage[r.index].texture = tex("luggage_" + g.archetype)
