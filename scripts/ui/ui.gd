@@ -408,6 +408,7 @@ func show_help() -> void:
 	_text(v, """You own a little roadside motel. Keep guests happy and make money.
 
 - Guests line up at the front desk. Someone has to be AT the desk to check them in or out.
+- Check-out is between 7 and 11 AM. Check-in opens at 3 PM. Use the time in between to clean.
 - When guests check out, their room is dirty. Click a dirty room to go clean it.
 - If a guest checks in before their room is clean, they wait in the lobby and get grumpy.
 - Waiting too long ruins the mood. Unhappy guests ask for discounts and leave bad reviews.

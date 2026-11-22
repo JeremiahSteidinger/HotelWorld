@@ -53,7 +53,7 @@ func new_game(mode: String) -> void:
 	_start_sim(mode)
 	ui.close_modal()
 	speed = 1
-	ui.toast("Welcome! Guests start arriving around noon. Clean dirty rooms and keep the desk staffed.")
+	ui.toast("Welcome! Check-out is 7-11 AM, check-in from 3 PM. Clean the rooms in between!")
 
 
 func save_game() -> void:

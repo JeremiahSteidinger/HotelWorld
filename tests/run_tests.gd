@@ -224,3 +224,24 @@ func test_save_load_round_trip() -> void:
 	t.tick(120.0)
 	check(is_equal_approx(t.cash, s.cash) and t.guests.size() == s.guests.size(), "loaded game continues identically")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_check_in_waits_for_3pm_and_checkouts_spread_7_to_11() -> void:
+	var s = fresh()
+	s.time = 13 * 60.0
+	var g = add_guest(s, "budget")
+	var mood: float = g.mood
+	s.tick(60.0)
+	check(g.state == "queue" and s.minute_of_day() < 15 * 60.0, "no check-in before 3 PM")
+	check(is_equal_approx(g.mood, mood) and g.wait == 0.0, "early guests don't lose patience before 3 PM")
+	check(run_until(s, func(): return g.state == "staying"), "checked in after 3 PM")
+	var mins := []
+	for i in 40:
+		var h = add_guest(s, "budget")
+		if h != null:
+			mins.append(h.checkout_minute)
+			s.guests.erase(h.id)
+			s.queue.erase(h.id)
+	mins.sort()
+	check(mins[0] >= 7 * 60.0 and mins[-1] <= 11 * 60.0, "checkout times fall between 7 and 11 AM")
+	check(mins[-1] - mins[0] > 120.0, "checkout times are spread out, not all at once")

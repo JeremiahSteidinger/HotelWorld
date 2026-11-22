@@ -186,6 +186,16 @@ func expected_arrivals() -> float:
 	return d["base_arrivals"] * (d["rating_base"] + d["rating_weight"] * rating())
 
 
+## Check-in opens at checkin_hour (3 PM). Late-night arrivals (after midnight) can still check in.
+func check_in_open() -> bool:
+	var m := minute_of_day()
+	return m >= bal["checkin_hour"] * 60.0 or m < bal["checkout_start_hour"] * 60.0
+
+
+func is_early(g) -> bool:
+	return g.purpose == "checkin" and not check_in_open()
+
+
 func free_rooms_for(room_type: String) -> int:
 	var n := 0
 	for r in rooms:
@@ -437,7 +447,8 @@ func _arrive() -> void:
 	g.purpose = "checkin"
 	guests[g.id] = g
 	queue.append(g.id)
-	_event("arrive", "%s arrived (%s, %d night%s)." % [g.name, a["name"], g.nights, "" if g.nights == 1 else "s"], {"guest": g.id})
+	_event("arrive", "%s arrived (%s, %d night%s)%s." % [g.name, a["name"], g.nights, "" if g.nights == 1 else "s",
+		"" if check_in_open() else " and will wait for 3 PM check-in"], {"guest": g.id})
 
 
 func _update_guest(g, dt: float) -> void:
@@ -447,6 +458,9 @@ func _update_guest(g, dt: float) -> void:
 		"queue":
 			var idx := queue.find(g.id)
 			_go(g, Layout.queue_slot(idx))
+			if is_early(g):
+				# Guests who arrive before check-in time wait patiently: they expected to.
+				return
 			g.wait += dt
 			if g.wait > m["wait_grace"]:
 				g.note("long_wait", -m["wait_per_minute"] * dt)
@@ -733,8 +747,14 @@ func _do_desk(w, dt: float) -> void:
 			stations[s] = -1
 			w.job = {}
 			return
-		if not queue.is_empty():
-			var g = guests[queue.pop_front()]
+		var next := -1
+		for i in queue.size():
+			if not is_early(guests[queue[i]]):
+				next = i
+				break
+		if next != -1:
+			var g = guests[queue[next]]
+			queue.remove_at(next)
 			g.state = "to_desk"
 			_go(g, Layout.SERVICE_SPOTS[s])
 			w.serving = g.id

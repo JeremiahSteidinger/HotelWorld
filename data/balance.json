@@ -64,7 +64,7 @@
     "base_arrivals": 6.5,
     "rating_base": 0.4,
     "rating_weight": 0.15,
-    "arrival_start_hour": 12,
+    "arrival_start_hour": 13,
     "arrival_end_hour": 22,
     "walkaway_price_ratio": 1.35,
     "wtp_base": 0.7,
@@ -112,5 +112,6 @@
     "start": 3.0,
     "window": 20,
     "prior_weight": 5
-  }
+  },
+  "checkin_hour": 15
 }

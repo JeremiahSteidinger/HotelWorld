@@ -44,6 +44,11 @@ func sync_guest(g, sim) -> void:
 	_bubble = ""
 	match g.state:
 		"queue", "to_desk":
+			if sim.is_early(g):
+				_bubble = "3 PM"
+				_bubble_color = Color(0.8, 0.8, 0.9)
+				queue_redraw()
+				return
 			_bar = 1.0 - clampf(g.wait / g.patience, 0.0, 1.0)
 			_bar_color = Color(0.3, 0.8, 0.3).lerp(Color(0.9, 0.2, 0.2), 1.0 - _bar)
 			if g.purpose == "checkout":
