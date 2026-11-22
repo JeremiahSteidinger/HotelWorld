@@ -114,12 +114,21 @@ func _build_buildings() -> void:
 	_box_sprite("desk", Vector2i(1, 1), 1, 22, Layout.to_screen(Vector2(1.5, 1.0)), objects)
 	for i in Layout.ROOM_COUNT:
 		_box_sprite("room_shell", Layout.room_origin(i), 2, 56, Vector2.ZERO, walls)
-		var bed := _box_sprite("bed_clean", Layout.room_bed(i), 1, 18, Layout.to_screen(Vector2(Layout.room_bed(i))), objects)
-		_beds.append(bed)
+		var room_beds: Array = []
+		for cell in Layout.room_beds(i, _bed_count(i)):
+			room_beds.append(_box_sprite("bed_clean", cell, 1, 18, Layout.to_screen(Vector2(cell)), objects))
+		_beds.append(room_beds)
 		var car_cell := Vector2i(5 + 2 * i, 4)
 		var car := _box_sprite(CAR_COLORS[i % CAR_COLORS.size()], car_cell, 1, 22, Layout.to_screen(Vector2(car_cell)), objects)
 		car.visible = false
 		_cars.append(car)
+
+
+## Double rooms get two beds, everything else one.
+func _bed_count(i: int) -> int:
+	if i < sim.rooms.size() and sim.rooms[i].type == "double":
+		return 2
+	return 1
 
 
 func _build_props() -> void:
@@ -141,7 +150,8 @@ func _process(_delta: float) -> void:
 func _sync_rooms() -> void:
 	_sign.texture = tex("sign" if sim.has_vacancy() else "sign_full")
 	for r in sim.rooms:
-		_beds[r.index].texture = tex("bed_messy" if r.state == "dirty" else "bed_clean")
+		for bed in _beds[r.index]:
+			bed.texture = tex("bed_messy" if r.state == "dirty" else "bed_clean")
 		var has_guest: bool = r.guest_id != -1 and sim.guests.has(r.guest_id) and sim.guests[r.guest_id].state in ["staying", "to_room", "waiting_room"]
 		_cars[r.index].visible = has_guest and sim.guests[r.guest_id].archetype != "budget"
 

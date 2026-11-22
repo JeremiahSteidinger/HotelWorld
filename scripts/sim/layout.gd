@@ -57,6 +57,14 @@ static func room_bed(i: int) -> Vector2i:
 	return Vector2i(6 + 2 * i, 0)
 
 
+## Bed cells for a room: the main bed (back-right), plus the back-left cell for a second bed.
+static func room_beds(i: int, count: int) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = [room_bed(i)]
+	if count >= 2:
+		cells.push_front(room_origin(i))
+	return cells
+
+
 static func room_work_spot(i: int) -> Vector2i:
 	return Vector2i(6 + 2 * i, 1)
 
