@@ -245,3 +245,13 @@ func test_check_in_waits_for_3pm_and_checkouts_spread_7_to_11() -> void:
 	mins.sort()
 	check(mins[0] >= 7 * 60.0 and mins[-1] <= 11 * 60.0, "checkout times fall between 7 and 11 AM")
 	check(mins[-1] - mins[0] > 120.0, "checkout times are spread out, not all at once")
+
+
+func test_no_vacancy_sign_state() -> void:
+	var s = fresh()
+	check(s.has_vacancy(), "empty motel has vacancy")
+	for r in s.rooms:
+		r.guest_id = 999
+	check(not s.has_vacancy(), "all rooms taken -> no vacancy")
+	s.rooms[4].guest_id = -1
+	check(s.has_vacancy(), "one free room -> vacancy again")

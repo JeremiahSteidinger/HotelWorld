@@ -43,7 +43,8 @@ var stats := {}
 var next_id := 1
 var neg_days := 0
 var game_over := ""     # "", "won", "bankrupt", "out_of_time"
-var events: Array = []  # notifications for the UI: {type, text, ...}
+var events: Array = []
+var _full_logged := false  # only announce "NO VACANCY" once each time the motel fills up  # notifications for the UI: {type, text, ...}
 
 
 # --------------------------------------------------------------------------- setup
@@ -196,6 +197,14 @@ func is_early(g) -> bool:
 	return g.purpose == "checkin" and not check_in_open()
 
 
+## True while at least one room is neither occupied nor reserved. Drives the roadside sign.
+func has_vacancy() -> bool:
+	for r in rooms:
+		if r.guest_id == -1:
+			return true
+	return false
+
+
 func free_rooms_for(room_type: String) -> int:
 	var n := 0
 	for r in rooms:
@@ -334,6 +343,8 @@ func tick(minutes: float) -> void:
 
 func _step(dt: float) -> void:
 	time += dt
+	if _full_logged and has_vacancy():
+		_full_logged = false
 	while not arrivals.is_empty() and arrivals[0] <= time:
 		arrivals.pop_front()
 		_arrive()
@@ -422,7 +433,11 @@ func _arrive() -> void:
 	if free_rooms_for(room_type) <= 0:
 		stats["lost_vacancy"] += 1
 		ledger["turned_away"] += 1
-		_event("lost", "No vacancy for %s (%s room)." % [guest_name, bal["room_types"][room_type]["name"]])
+		if has_vacancy():
+			_event("lost", "No %s room free for %s." % [bal["room_types"][room_type]["name"].to_lower(), guest_name])
+		elif not _full_logged:
+			_full_logged = true
+			_event("lost", "Every room is taken. The sign now says NO VACANCY and guests drive past.")
 		return
 	if queue.size() >= int(bal["max_line"]):
 		stats["lost_line"] += 1

@@ -19,6 +19,7 @@ var shots := [
 	[240, "reviews_panel", 0.0, "reviews"],
 	[280, "day_report", 0.0, "report"],
 	[320, "discount", 0.0, "discount"],
+	[360, "no_vacancy", 0.0, "fill"],
 ]
 
 
@@ -60,6 +61,11 @@ func _act(action: String, minutes: float) -> void:
 		"report":
 			if not main.sim.reports.is_empty():
 				ui.show_report(main.sim.reports[-1])
+		"fill":
+			ui.close_modal()
+			for r in main.sim.rooms:
+				if r.guest_id == -1:
+					r.guest_id = 999
 		"discount":
 			ui.close_modal()
 			for gid in main.sim.guests:
