@@ -25,13 +25,14 @@ func _diamond(origin: Vector2, w: float, d: float) -> PackedVector2Array:
 func _draw() -> void:
 	if sim == null:
 		return
+	var L = sim.layout
 	var font := ThemeDB.fallback_font
 	if hover_room >= 0:
-		draw_polyline(_diamond(Vector2(Layout.room_origin(hover_room)), 2, 2), Color(1, 1, 0.5, 0.9), 2.0)
+		draw_polyline(_diamond(Vector2(L.room_origin(hover_room)), 2, 2), Color(1, 1, 0.5, 0.9), 2.0)
 	if hover_desk:
-		draw_polyline(_diamond(Vector2(0, 0), 4, 5), Color(1, 1, 0.5, 0.9), 2.0)
+		draw_polyline(_diamond(Vector2(L.lobby.position), L.lobby.size.x, L.lobby.size.y), Color(1, 1, 0.5, 0.9), 2.0)
 	for r in sim.rooms:
-		var c := Layout.room_badge_pos(r.index)
+		var c: Vector2 = L.room_badge_pos(r.index)
 		var label := "Clean"
 		var col := Color(0.3, 0.75, 0.4)
 		if r.state == "occupied":
@@ -43,8 +44,12 @@ func _draw() -> void:
 		elif r.guest_id != -1:
 			label = "Reserved"
 			col = Color(0.3, 0.65, 0.55)
+		if r.broken != "":
+			var fixing: bool = r.fixer_id != -1 and r.repair_progress > 0.0
+			label = ("Dirty, " if r.state == "dirty" else "") + ("Fixing " if fixing else "Broken ") + r.broken
+			col = Color(0.55, 0.45, 0.15) if fixing else Color(0.8, 0.25, 0.25)
 		var waiting: bool = sim.waiting_guests_for_room(r.index)
-		var text := "%d %s %s" % [r.index + 1, "S" if r.type == "single" else "D", label]
+		var text := "%s %s %s" % [sim.room_label(r.index), sim.cfg["room_types"][r.type]["short"], label]
 		var size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 10)
 		var rect := Rect2(c.x - size.x / 2 - 4, c.y - 8, size.x + 8, 14)
 		if waiting:
@@ -53,8 +58,15 @@ func _draw() -> void:
 		draw_rect(rect, col)
 		draw_rect(rect, Color(0, 0, 0, 0.6), false, 1.0)
 		draw_string(font, Vector2(rect.position.x + 4, rect.position.y + 11), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
-		if r.state == "dirty" and r.clean_progress > 0.0:
+		var bar := -1.0
+		var bar_col := Color(0.5, 0.85, 1.0)
+		if r.broken != "" and r.repair_progress > 0.0:
+			bar = r.repair_progress
+			bar_col = Color(1.0, 0.75, 0.3)
+		elif r.state == "dirty" and r.clean_progress > 0.0:
+			bar = r.clean_progress
+		if bar >= 0.0:
 			draw_rect(Rect2(rect.position.x, rect.end.y + 1, rect.size.x, 3), Color(0, 0, 0, 0.6))
-			draw_rect(Rect2(rect.position.x, rect.end.y + 1, rect.size.x * r.clean_progress, 3), Color(0.5, 0.85, 1.0))
-		if r.cleaner_id != -1 and r.clean_progress == 0.0:
+			draw_rect(Rect2(rect.position.x, rect.end.y + 1, rect.size.x * bar, 3), bar_col)
+		if (r.cleaner_id != -1 and r.clean_progress == 0.0) or (r.fixer_id != -1 and r.repair_progress == 0.0):
 			draw_string(font, Vector2(rect.end.x + 2, rect.position.y + 11), "...", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)

@@ -121,8 +121,13 @@ EXT = (236, 222, 190, 255)        # stucco
 TRIM = (190, 74, 58, 255)          # red motel trim
 
 
-def shell(name, w, d, wall_in, door_front_left=None, door_front_right=None, windows=True, sign=None, left_h=WALL_H):
-    """Back walls (seen from inside) plus low front walls with door gaps."""
+def shell(name, w, d, wall_in, door_front_left=None, door_front_right=None, windows=True, sign=None, left_h=WALL_H,
+          right_h=WALL_H, door_back_right=None, trim=None, front=True):
+    """Back walls (seen from inside) plus low front walls with door gaps.
+    right_h < WALL_H gives a cut-away back-right wall; door_back_right=(x0, x1) leaves a gap in it."""
+    TRIM = trim or globals()["TRIM"]
+    if right_h < WALL_H:
+        return _low_shell(name, w, d, wall_in, left_h, right_h, door_back_right, TRIM, door_front_left, door_front_right, front)
     img, dr, ox, oy = canvas(w, d, WALL_H)
     # back-left wall along grid x=0 (from y=0..d)
     a, b = iso(0, 0, ox, oy), iso(0, d, ox, oy)
@@ -148,6 +153,11 @@ def shell(name, w, d, wall_in, door_front_left=None, door_front_right=None, wind
         p = iso(0, d * 0.5, ox, oy)
         dr.polygon([(p[0] - 20, p[1] - 30), (p[0] + 2, p[1] - 41), (p[0] + 2, p[1] - 51), (p[0] - 20, p[1] - 40)],
                    fill=(60, 40, 30, 255))
+    _front_walls(dr, ox, oy, w, d, door_front_left, door_front_right)
+    save(img, name)
+
+
+def _front_walls(dr, ox, oy, w, d, door_front_left, door_front_right):
     low = 9
     # low front-left wall along y=d, with an optional door gap [x0, x1)
     segs = [(0, w)] if door_front_left is None else [(0, door_front_left[0]), (door_front_left[1], w)]
@@ -160,7 +170,6 @@ def shell(name, w, d, wall_in, door_front_left=None, door_front_right=None, wind
         if s1 > s0:
             p, q = iso(w, s0, ox, oy), iso(w, s1, ox, oy)
             dr.polygon([p, q, (q[0], q[1] - low), (p[0], p[1] - low)], fill=shade(EXT, 0.65), outline=shade(EXT, 0.45))
-    save(img, name)
 
 
 shell("room_shell", 2, 2, (210, 196, 220, 255), door_front_left=(0, 1), left_h=16)
@@ -331,7 +340,7 @@ def person(dr, x, top, shirt, pants, skin, hair, frame, scale=1.0, extra=None):
         extra(R, frame)
 
 
-def char(name, shirt, pants, extra=None, skin=None, hair=None, kid=None):
+def char(name, shirt, pants, extra=None, skin=None, hair=None, kid=None, kid_scale=0.7):
     for frame in (0, 1):
         img = Image.new("RGBA", (28 if kid else 18, 34), (0, 0, 0, 0))
         dr = ImageDraw.Draw(img)
@@ -340,7 +349,9 @@ def char(name, shirt, pants, extra=None, skin=None, hair=None, kid=None):
         hr = hair or random.choice(HAIRS)
         person(dr, 9, 3, shirt, pants, sk, hr, frame, extra=extra)
         if kid:
-            person(dr, 21, 12, kid, (60, 80, 140), sk, hr, 1 - frame, scale=0.7)
+            top = 3 + int(round((1 - kid_scale) * 30))
+            person(dr, 21, top, kid, (60, 80, 140), random.choice(SKINS) if kid_scale > 0.8 else sk,
+                   random.choice(HAIRS) if kid_scale > 0.8 else hr, 1 - frame, scale=kid_scale)
         outline(img)
         save(img, f"{name}_{frame}")
 
@@ -372,6 +383,28 @@ char("guest_budget", (90, 170, 80), (90, 110, 160), backpack)
 char("guest_business", (50, 60, 90), (50, 60, 90), briefcase)
 char("guest_family", (240, 150, 60), (110, 90, 70), kid=(240, 200, 60))
 
+def _low_shell(name, w, d, wall_in, left_h, right_h, door_back_right, trim, door_front_left, door_front_right, front):
+    """A room whose back walls are both low (cut away), so people behind it stay visible."""
+    img, dr, ox, oy = canvas(w, d, WALL_H)
+    a, b = iso(0, 0, ox, oy), iso(0, d, ox, oy)
+    dr.polygon([a, b, (b[0], b[1] - left_h), (a[0], a[1] - left_h)], fill=shade(wall_in, 0.85))
+    dr.line([(b[0], b[1] - left_h), (a[0], a[1] - left_h)], fill=trim, width=3)
+    segs = [(0, w)] if door_back_right is None else [(0, door_back_right[0]), (door_back_right[1], w)]
+    for s0, s1 in segs:
+        if s1 > s0:
+            p, q = iso(s0, 0, ox, oy), iso(s1, 0, ox, oy)
+            dr.polygon([p, q, (q[0], q[1] - right_h), (p[0], p[1] - right_h)], fill=wall_in)
+            dr.line([(p[0], p[1] - right_h), (q[0], q[1] - right_h)], fill=trim, width=3)
+    if door_back_right is not None:
+        for gx in door_back_right:
+            p = iso(gx, 0, ox, oy)
+            dr.line([(p[0], p[1]), (p[0], p[1] - right_h - 2)], fill=shade(trim, 0.8), width=2)
+    dr.line([b, a, iso(w, 0, ox, oy)], fill=shade(wall_in, 0.55), width=2)
+    if front:
+        _front_walls(dr, ox, oy, w, d, door_front_left, door_front_right)
+    save(img, name)
+
+
 # ----------------------------------------------------------------------------- icon
 
 def icon():
@@ -387,4 +420,92 @@ def icon():
 
 
 icon()
+
+# ----------------------------------------------------------------------------- phase 2: Maple Grove Hotel
+# (Drawn after everything else so the random details of the older art stay the same.)
+
+HOTEL_TRIM = (40, 70, 120, 255)      # navy trim
+shell("hotel_lobby_shell", 6, 5, (214, 226, 214, 255), door_front_left=(3, 4), door_front_right=(2, 3), trim=HOTEL_TRIM)
+shell("hotel_room_shell", 2, 2, (226, 214, 180, 255), door_front_left=(0, 1), left_h=16, trim=HOTEL_TRIM)
+shell("hotel_room_shell_front", 2, 2, (226, 214, 180, 255), left_h=16, right_h=16, door_back_right=(0, 1), trim=HOTEL_TRIM)
+
+
+def desk3():
+    img, dr, ox, oy = canvas(3, 1, 22)
+    box(dr, ox, oy, 0, 0.15, 3, 0.7, 20, (70, 60, 80, 255))
+    diamond(dr, ox, oy, 0, 0.1, 3, 0.8, (150, 130, 160, 255), lift=20)
+    for gx in (0.5, 1.5, 2.5):
+        p = iso(gx + 0.3, 0.5, ox, oy - 20)
+        dr.rectangle([p[0] - 6, p[1] - 12, p[0] + 4, p[1] - 4], fill=(60, 64, 72, 255))
+        dr.rectangle([p[0] - 5, p[1] - 11, p[0] + 3, p[1] - 6], fill=(120, 210, 230, 255))
+    q = iso(1.2, 0.5, ox, oy - 20)
+    dr.ellipse([q[0] - 3, q[1] - 4, q[0] + 3, q[1]], fill=(240, 200, 60, 255))
+    save(img, "desk3")
+
+
+def hall(dr, px, mask):
+    for x in range(64):
+        for y in range(32):
+            if mask[x][y] and (x // 4 + y // 2) % 5 == 0:
+                px[x, y] = (150, 120, 60, 255)
+
+
+def marble(dr, px, mask):
+    for x in range(64):
+        for y in range(32):
+            if mask[x][y]:
+                gx = (x / 32 + y / 16) / 2 * 2
+                gy = (y / 16 - x / 32) / 2 * 2
+                if (int(gx) + int(gy + 8)) % 2 == 0:
+                    px[x, y] = (200, 205, 212, 255)
+
+
+def hotel_sign(full):
+    img = Image.new("RGBA", (80, 120), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    dr.rectangle([37, 40, 42, 118], fill=(70, 70, 80, 255))
+    dr.rounded_rectangle([2, 2, 77, 44], 6, fill=(28, 44, 80, 255), outline=(230, 200, 110, 255), width=3)
+    font = {
+        "H": ["10001", "10001", "11111", "10001", "10001"],
+        "O": ["01110", "10001", "10001", "10001", "01110"],
+        "T": ["11111", "00100", "00100", "00100", "00100"],
+        "E": ["11111", "10000", "11110", "10000", "11111"],
+        "L": ["10000", "10000", "10000", "10000", "11111"],
+    }
+    x = 18
+    for ch in "HOTEL":
+        for r, row in enumerate(font[ch]):
+            for c, bit in enumerate(row):
+                if bit == "1":
+                    dr.rectangle([x + c * 2, 10 + r * 2, x + c * 2 + 1, 10 + r * 2 + 1], fill=(240, 220, 150, 255))
+        x += 9
+    dr.rectangle([6, 26, 21, 37], fill=(150, 25, 35, 255) if full else (40, 50, 70, 255))
+    dr.text((8, 26), "NO", fill=(255, 225, 220, 255) if full else (80, 90, 110, 255))
+    dr.rectangle([24, 26, 73, 37], fill=(150, 25, 35, 255) if full else (30, 110, 70, 255))
+    dr.text((27, 26), "VACANCY", fill=(255, 225, 220, 255) if full else (150, 255, 170, 255))
+    save(img, "hotel_sign_full" if full else "hotel_sign")
+
+
+def armchair():
+    img, dr, ox, oy = canvas(1, 1, 16)
+    col = (170, 60, 70, 255)
+    box(dr, ox, oy, 0.25, 0.25, 0.5, 0.5, 7, col)
+    box(dr, ox, oy, 0.25, 0.25, 0.12, 0.5, 14, shade(col, 0.9))
+    box(dr, ox, oy, 0.25, 0.25, 0.5, 0.12, 14, shade(col, 0.9))
+    save(img, "armchair")
+
+
+def toolbelt(R, f):
+    R(-4, 17, 4, 18, (90, 60, 30)); R(2, 18, 3, 20, (160, 160, 170)); R(-3, 18, -2, 20, (200, 160, 40))
+    R(-4, 0, 4, 2, (240, 200, 40))
+
+
+tile("tile_hall", (60, 90, 80, 255), None, hall)
+tile("tile_marble", (226, 228, 232, 255), None, marble)
+desk3()
+hotel_sign(False)
+hotel_sign(True)
+armchair()
+char("maintenance", (230, 120, 40), (60, 70, 110), toolbelt)
+char("guest_couple", (180, 70, 140), (50, 50, 70), kid=(70, 140, 200), kid_scale=0.95)
 print("art written to", os.path.abspath(OUT))

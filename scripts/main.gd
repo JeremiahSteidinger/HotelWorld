@@ -1,7 +1,8 @@
 extends Node2D
 ## Game entry point: owns the simulation, camera, input and speed controls.
+## `game` is the whole business; `sim` is the property currently on screen.
 
-const Sim := preload("res://scripts/sim/sim.gd")
+const Game := preload("res://scripts/sim/game.gd")
 const Layout := preload("res://scripts/sim/layout.gd")
 const WorldView := preload("res://scripts/view/world_view.gd")
 const UI := preload("res://scripts/ui/ui.gd")
@@ -11,7 +12,10 @@ const MIN_ZOOM := 0.6
 const MAX_ZOOM := 4.0
 
 var balance: Dictionary
-var sim
+var game
+var sim          # the property being viewed
+var view := 0    # its index in game.properties
+var _cam_by_prop := {}
 var speed := 1
 var _speed_before_pause := 1
 var world
@@ -22,7 +26,7 @@ var _dragging := false
 
 
 func _ready() -> void:
-	balance = Sim.load_balance()
+	balance = Game.load_balance()
 	world = WorldView.new()
 	add_child(world)
 	camera.zoom = Vector2(1.5, 1.5)
@@ -38,14 +42,34 @@ func _ready() -> void:
 
 
 func _start_sim(mode: String) -> void:
-	sim = Sim.new()
-	sim.new_game(balance, mode)
+	game = Game.new()
+	game.new_game(balance.duplicate(true), mode)
 	_attach()
 
 
 func _attach() -> void:
+	_cam_by_prop = {}
+	view = -1
+	show_property(maxi(0, game.owner_prop()))
+
+
+## Switch the screen to another property (the owner stays where they are).
+func show_property(index: int) -> void:
+	index = clampi(index, 0, game.properties.size() - 1)
+	if view >= 0 and view < game.properties.size():
+		_cam_by_prop[view] = [camera.position, camera.zoom]
+	view = index
+	sim = game.properties[index]
 	world.setup(sim)
+	if _cam_by_prop.has(index):
+		camera.position = _cam_by_prop[index][0]
+		camera.zoom = _cam_by_prop[index][1]
+	else:
+		camera.position = sim.layout.camera_home
+		camera.zoom = Vector2(1.5, 1.5) if sim.layout.kind == "motel" else Vector2(1.2, 1.2)
+	ui.game = game
 	ui.sim = sim
+	ui.rebuild_tabs()
 	ui.refresh()
 
 
@@ -56,20 +80,25 @@ func new_game(mode: String) -> void:
 	ui.toast("Welcome! Check-out is 7-11 AM, check-in from 3 PM. Clean the rooms in between!")
 
 
+func buy_property(key: String, pay_full := false) -> void:
+	if game.buy_property(key, pay_full):
+		show_property(game.properties.size() - 1)
+
+
 func save_game() -> void:
-	if sim.save_to(SAVE_PATH):
+	if game.save_to(SAVE_PATH):
 		ui.toast("Game saved.")
 	else:
 		ui.toast("Couldn't save the game.")
 
 
 func load_game() -> void:
-	var s = Sim.new()
-	if s.load_from(balance, SAVE_PATH):
-		sim = s
+	var g = Game.new()
+	if g.load_from(balance.duplicate(true), SAVE_PATH):
+		game = g
 		_attach()
 		ui.close_modal()
-		ui.toast("Game loaded: day %d." % sim.day())
+		ui.toast("Game loaded: day %d." % game.day())
 	else:
 		ui.toast("No saved game found.")
 
@@ -83,17 +112,19 @@ func set_speed(s: int) -> void:
 func _process(delta: float) -> void:
 	if sim == null:
 		return
-	if speed > 0 and not ui.is_modal_open() and sim.game_over == "":
-		sim.tick(delta * balance["minutes_per_second"] * speed)
-	for e in sim.pop_events():
+	if speed > 0 and not ui.is_modal_open() and game.game_over == "":
+		game.tick(delta * balance["minutes_per_second"] * speed)
+	for e in game.pop_events():
 		ui.push_log(e)
 		match e["type"]:
-			"discount":
-				ui.queue_discount(e["guest"])
-			"early":
-				ui.queue_discount(e["guest"])
+			"discount", "early":
+				ui.queue_discount(e["prop"], e["guest"])
 			"day_end":
 				ui.queue_report(e["report"])
+			"chapter":
+				ui.queue_chapter(e["text"])
+			"bought":
+				ui.rebuild_tabs()
 			"game_over":
 				ui.show_game_over(e["text"])
 	ui.refresh()
@@ -120,7 +151,7 @@ func _keyboard_pan(delta: float) -> void:
 
 
 func _clamp_camera() -> void:
-	camera.position = camera.position.clamp(Vector2(-500, -150), Vector2(700, 500))
+	camera.position = camera.position.clamp(sim.layout.camera_min, sim.layout.camera_max)
 
 
 func _zoom(factor: float, at_screen := Vector2.INF) -> void:
@@ -137,7 +168,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_ESCAPE:
-				if ui.is_modal_open() and ui.modal_kind in ["rates", "staff", "reviews", "help"]:
+				if ui.is_modal_open() and ui.modal_kind in ["rates", "staff", "reviews", "help", "bank", "properties", "report"]:
 					ui.close_modal()
 			KEY_SPACE:
 				set_speed(_speed_before_pause if speed == 0 else 0)
@@ -149,6 +180,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				set_speed(4)
 			KEY_F:
 				sim.order_desk()
+			KEY_TAB:
+				if not ui.is_modal_open() and game.properties.size() > 1:
+					show_property((view + 1) % game.properties.size())
 			KEY_EQUAL, KEY_PLUS, KEY_KP_ADD:
 				_zoom(1.15)
 			KEY_MINUS, KEY_KP_SUBTRACT:
@@ -182,16 +216,17 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _target_at(world_pos: Vector2) -> Dictionary:
-	var cell := Layout.to_grid(world_pos)
-	var room := Layout.cell_to_room(cell)
+	var L = sim.layout
+	var cell: Vector2i = Layout.to_grid(world_pos)
+	var room: int = L.cell_to_room(cell)
 	if room >= 0:
 		return {"type": "room", "room": room}
 	# Badges float above rooms: let clicks on them count too.
-	for i in Layout.ROOM_COUNT:
-		var badge := Layout.room_badge_pos(i)
-		if Rect2(badge - Vector2(42, 10), Vector2(84, 20)).has_point(world_pos):
+	for i in L.room_count():
+		var badge: Vector2 = L.room_badge_pos(i)
+		if Rect2(badge - Vector2(48, 10), Vector2(96, 20)).has_point(world_pos):
 			return {"type": "room", "room": i}
-	if Layout.LOBBY.has_point(cell) or Layout.line_cells().has(cell):
+	if L.in_lobby(cell) or L.line.has(cell):
 		return {"type": "desk"}
 	for key in world.characters_at(world_pos):
 		if key.begins_with("g"):
@@ -199,15 +234,21 @@ func _target_at(world_pos: Vector2) -> Dictionary:
 	return {}
 
 
+func _where() -> String:
+	return "" if game.owner_prop() == view else " (you'll drive over first)"
+
+
 func _click(world_pos: Vector2) -> void:
 	var t := _target_at(world_pos)
 	match t.get("type", ""):
 		"room":
-			if sim.order_clean(t["room"]):
-				ui.toast("Added to your to-do list: clean room %d." % (t["room"] + 1))
+			var added: Array = sim.order_room(t["room"])
+			if not added.is_empty():
+				var what := " and ".join(added.map(func(a): return "fix" if a == "fix" else "clean"))
+				ui.toast("Added to your to-do list: %s room %s%s." % [what, sim.room_label(t["room"]), _where()])
 		"desk":
 			sim.order_desk()
-			ui.toast("Heading to the front desk.")
+			ui.toast("Heading to the front desk%s." % _where())
 
 
 func _update_hover() -> void:
@@ -222,13 +263,21 @@ func _update_hover() -> void:
 	match t.get("type", ""):
 		"room":
 			var r = sim.rooms[t["room"]]
-			var desc := "Room %d (%s)" % [r.index + 1, sim.bal["room_types"][r.type]["name"]]
+			var desc := "Room %s (%s)" % [sim.room_label(r.index), sim.room_type_name(r.type)]
+			var parts := []
 			if r.state == "dirty":
-				ui.set_hint(desc + " - dirty. Click to clean it.")
+				parts.append("dirty")
 			elif r.state == "occupied":
-				ui.set_hint(desc + " - a guest is staying here.")
-			else:
+				parts.append("a guest is staying here")
+			if r.broken != "":
+				parts.append("the %s is broken" % r.broken)
+			if parts.is_empty():
 				ui.set_hint(desc + " - clean and ready.")
+			elif r.state == "dirty" or r.broken != "":
+				ui.set_hint(desc + " - " + ", ".join(parts) + ". Click to " + ("clean" if r.state == "dirty" else "") +
+					(" and " if r.state == "dirty" and r.broken != "" else "") + ("fix" if r.broken != "" else "") + " it.")
+			else:
+				ui.set_hint(desc + " - " + parts[0] + ".")
 		"desk":
 			ui.set_hint("Front desk - click to work the desk. %d in line." % sim.queue.size())
 		_:

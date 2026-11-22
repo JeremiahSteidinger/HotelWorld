@@ -1,7 +1,7 @@
 # HotelWorld — Game Plan
 
 ## Context
-HotelWorld is a hobby tycoon game for Windows and Mac, for personal play. You start with a small roadside motel and run it yourself, checking guests in and cleaning rooms. Every task takes time, and long lines or dirty rooms lead to bad reviews and discount requests. Profit pays for staff, and later for bigger hotels. Milestone 1 (the playable motel) is built; see the README for how to run it.
+HotelWorld is a hobby tycoon game for Windows and Mac, for personal play. You start with a small roadside motel and run it yourself, checking guests in and cleaning rooms. Every task takes time, and long lines or dirty rooms lead to bad reviews and discount requests. Profit pays for staff, and later for bigger hotels. Milestone 1 (the playable motel) and Phase 2 (the hotel, bank, shifts and maintenance) are built; see the README for how to run it.
 
 ## Locked decisions
 - **Engine:** Godot 4.3 (GDScript). **Look:** 2D isometric pixel art. **Owner tasks:** click to assign. The owner walks over and a progress bar runs.
@@ -10,14 +10,24 @@ HotelWorld is a hobby tycoon game for Windows and Mac, for personal play. You st
 - **Modes:** campaign goals plus a sandbox. Bankruptcy ends the game in campaign mode. M1 ships one campaign goal plus the sandbox.
 - **Guests:** archetypes (Budget Traveller, Family, Business) with different budgets, patience and stay lengths.
 - **Rates:** one nightly rate per room type (M1 room types: Single, Double). No weekend or season pricing.
-- **Staff:** wages only. A housekeeper or front desk clerk works at a fixed speed. Low pay relative to the market gives a small morale penalty that makes them quit sooner. No skill, training or shifts yet.
-- **Finances:** cash, room revenue, wages and daily upkeep. No taxes, loans or mortgages (loans and mortgages come in phase 2).
+- **Staff:** wages and shifts (phase 2). A housekeeper, front desk clerk or maintenance tech works at a fixed speed. Low pay relative to the market gives a small morale penalty that makes them quit sooner. No skill or training yet.
+- **Finances:** cash, room revenue, wages and daily upkeep. Loans and mortgages since phase 2. No taxes.
 - **Amenities:** roadmap only.
 - **Tone:** light and humorous. Funny review text and guest quirks.
 - **Platform:** Windows and macOS, personal use, no Steam.
 
+## Phase 2 (built)
+Playtest of M1: chapter 1 was won on day 24 of 30, which matches the bots (the solo bot wins on days 22–25), so its balance is unchanged.
+- **Structure:** the simulation is split into `Game` (one clock, one bank account, loans, campaign, the owner's travel) and `Property` (map, rooms, guests, staff, reviews, rates). The Game ticks every property each step; each property pays its own wages and upkeep at midnight, then the bank takes its payments.
+- **Second property:** the Maple Grove Hotel. It has 14 rooms (6 Queen, 5 King, 3 Suite), a 6×5 lobby with a three-person desk, an indoor hall with rooms on both sides (front-row rooms have cut-away walls so the hall stays visible), and a bigger parking lot. It attracts more business guests, plus a new archetype: Couples on a Getaway, who book suites. It costs $40,000, is rated 2.6 when you buy it, and 4 rooms are out of order.
+- **Owner travel:** the owner is at one property at a time. An order at the other property (click a room, the desk, or "Drive to...") makes them walk to the car and drive over (40 game minutes) first. The view (tabs, Tab key) is separate from where the owner is.
+- **Maintenance:** each check-out has a chance to break something (4% at the motel, 10% at the hotel), with funny log text. Broken rooms can't be rented. A maintenance tech fixes one in 30 minutes; the owner takes 60. Parts cost $15.
+- **Shifts:** Day 7–15, Evening 15–23, Night 23–7. Staff arrive at the start of their shift, finish the guest or room they're on, then go home. A wage covers one shift per day. New clerks start on Evening (check-ins), housekeepers and techs on Day. The Staff window shows coverage per shift and warns when the desk has gaps.
+- **Bank:** business loans up to 50% of property value minus existing debt, at 0.4%/day over 30 days, with amortized daily payments and early repayment. Mortgage: 20% down, then 0.1%/day over 150 days (about $229/day for the hotel).
+- **Campaign:** chapter 1 is unchanged except that the goal counts savings (cash minus loans), so borrowing can't win it. Chapter 2: own the hotel and reach $100,000 net worth by day 100. The pro bot wins chapter 2 around days 81–85, and a human juggling two properties will have less slack. Sandbox: the hotel is for sale whenever you have the down payment.
+- **Saves:** version 2. Version 1 saves are converted on load.
+
 ## Roadmap (recorded in docs, not built now)
-- **Phase 2:** loans and mortgages, a second property (mid-size hotel), maintenance staff, shifts.
 - **Phase 3:** training and skills. Promotions: front desk clerk → front desk manager → general manager (managers automate decisions and give bonuses to their team).
 - **Phase 4:** amenities (restaurant, spa and massage, pool and water park), free build mode, a map with multiple properties.
 

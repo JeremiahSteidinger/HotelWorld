@@ -78,6 +78,9 @@ func sync_worker(w, sim) -> void:
 	if w.job.get("type", "") == "clean" and w.arrived():
 		_bar = sim.rooms[w.job["room"]].clean_progress
 		_bar_color = Color(0.4, 0.7, 1.0)
+	elif w.job.get("type", "") == "fix" and w.arrived():
+		_bar = sim.rooms[w.job["room"]].repair_progress
+		_bar_color = Color(1.0, 0.75, 0.3)
 	elif w.serving != -1 and sim.guests.has(w.serving) and sim.guests[w.serving].state == "at_desk":
 		var g = sim.guests[w.serving]
 		var need: float = sim.bal["task_minutes"]["check_in" if g.purpose == "checkin" else "check_out"]
@@ -86,6 +89,9 @@ func sync_worker(w, sim) -> void:
 	if w.role == "owner":
 		_bubble = "YOU"
 		_bubble_color = Color(1.0, 0.45, 0.4)
+	elif not sim.on_duty(w):
+		_bubble = "BYE"
+		_bubble_color = Color(0.75, 0.75, 0.85)
 	queue_redraw()
 
 
