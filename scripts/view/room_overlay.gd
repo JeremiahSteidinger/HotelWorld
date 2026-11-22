@@ -31,7 +31,7 @@ func _draw() -> void:
 	if hover_desk:
 		draw_polyline(_diamond(Vector2(0, 0), 4, 5), Color(1, 1, 0.5, 0.9), 2.0)
 	for r in sim.rooms:
-		var c := Layout.to_screen(Vector2(5.5 + 2 * r.index, 0.5)) + Vector2(0, -78)
+		var c := Layout.room_badge_pos(r.index)
 		var label := "Clean"
 		var col := Color(0.3, 0.75, 0.4)
 		if r.state == "occupied":

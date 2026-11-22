@@ -149,3 +149,9 @@ static func to_grid(s: Vector2) -> Vector2i:
 	var gx := (s.x / 32.0 + sy / 16.0) / 2.0
 	var gy := (sy / 16.0 - s.x / 32.0) / 2.0
 	return Vector2i(roundi(gx), roundi(gy))
+
+
+## Where a room's status label goes: centred over the room's own back wall, just above the trim.
+static func room_badge_pos(i: int) -> Vector2:
+	var c := 6 + 2 * i
+	return Vector2(c * 32.0, c * 16.0) + Vector2(0, -66)

@@ -186,7 +186,7 @@ func _target_at(world_pos: Vector2) -> Dictionary:
 		return {"type": "room", "room": room}
 	# Badges float above rooms: let clicks on them count too.
 	for i in Layout.ROOM_COUNT:
-		var badge := Layout.to_screen(Vector2(5.5 + 2 * i, 0.5)) + Vector2(0, -78)
+		var badge := Layout.room_badge_pos(i)
 		if Rect2(badge - Vector2(42, 10), Vector2(84, 20)).has_point(world_pos):
 			return {"type": "room", "room": i}
 	if Layout.LOBBY.has_point(cell) or Layout.line_cells().has(cell):
