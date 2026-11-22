@@ -163,7 +163,18 @@ def shell(name, w, d, wall_in, door_front_left=None, door_front_right=None, wind
     save(img, name)
 
 
+def side_wall(name, w, d):
+    """Just the low front-right wall of a w x d shell, on the same canvas as the shell.
+    Drawn over the last room so its bed can't poke through the motel's end wall."""
+    img, dr, ox, oy = canvas(w, d, WALL_H)
+    low = 9
+    p, q = iso(w, 0, ox, oy), iso(w, d, ox, oy)
+    dr.polygon([p, q, (q[0], q[1] - low), (p[0], p[1] - low)], fill=shade(EXT, 0.65), outline=shade(EXT, 0.45))
+    save(img, name)
+
+
 shell("room_shell", 2, 2, (210, 196, 220, 255), door_front_left=(0, 1), left_h=16)
+side_wall("room_side", 2, 2)
 shell("lobby_shell", 4, 5, (226, 206, 160, 255), door_front_left=(2, 3), door_front_right=(2, 3))
 
 # ----------------------------------------------------------------------------- furniture / props
