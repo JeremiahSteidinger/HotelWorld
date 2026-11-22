@@ -230,6 +230,7 @@ func test_check_in_waits_for_3pm_and_checkouts_spread_7_to_11() -> void:
 	var s = fresh()
 	s.time = 13 * 60.0
 	var g = add_guest(s, "budget")
+	g.early_state = "done"  # already told to wait for 3 PM
 	var mood: float = g.mood
 	s.tick(60.0)
 	check(g.state == "queue" and s.minute_of_day() < 15 * 60.0, "no check-in before 3 PM")
@@ -245,3 +246,73 @@ func test_check_in_waits_for_3pm_and_checkouts_spread_7_to_11() -> void:
 	mins.sort()
 	check(mins[0] >= 7 * 60.0 and mins[-1] <= 11 * 60.0, "checkout times fall between 7 and 11 AM")
 	check(mins[-1] - mins[0] > 120.0, "checkout times are spread out, not all at once")
+
+
+func test_no_vacancy_sign_state() -> void:
+	var s = fresh()
+	check(s.has_vacancy(), "empty motel has vacancy")
+	for r in s.rooms:
+		r.guest_id = 999
+	check(not s.has_vacancy(), "all rooms taken -> no vacancy")
+	s.rooms[4].guest_id = -1
+	check(s.has_vacancy(), "one free room -> vacancy again")
+
+
+func _early_guest(s, archetype := "budget"):
+	s.time = 13 * 60.0
+	var g = add_guest(s, archetype)
+	check(run_until(s, func(): return g.state == "early_request", 60.0), "early guest asks to check in early")
+	return g
+
+
+func test_early_checkin_free() -> void:
+	var s = fresh()
+	var g = _early_guest(s)
+	var mood: float = g.mood
+	s.resolve_early(g.id, "free")
+	check(g.mood > mood, "free early check-in makes the guest happier")
+	check(run_until(s, func(): return g.state == "staying", 60.0) and s.minute_of_day() < 15 * 60.0, "checked in before 3 PM")
+
+
+func test_early_checkin_refused() -> void:
+	var s = fresh()
+	var g = _early_guest(s)
+	s.resolve_early(g.id, "no")
+	check(g.state == "queue" and g.early_state == "done", "refused guest goes back to the line")
+	s.tick(60.0)
+	check(g.state == "queue", "and is not asked again or checked in before 3 PM")
+	check(run_until(s, func(): return g.state == "staying", 200.0), "checks in after 3 PM")
+
+
+func test_early_checkin_fee_and_haggle() -> void:
+	var s = fresh()
+	s.bal["early_checkin"]["haggle_chance"]["business"] = 0.0
+	var g = _early_guest(s, "business")
+	var cash: float = s.cash
+	s.resolve_early(g.id, "fee")
+	check(is_equal_approx(s.cash - cash, s.early_fee) and g.early_fee == s.early_fee, "fee charged")
+	var t = fresh()
+	t.bal["early_checkin"]["haggle_chance"]["budget"] = 1.0
+	t.bal["early_checkin"]["pay_after_insist_chance"]["budget"] = 0.0
+	var h = _early_guest(t, "budget")
+	t.resolve_early(h.id, "fee")
+	check(h.state == "early_request" and h.early_state == "haggling", "guest haggles over the fee")
+	t.resolve_early(h.id, "fee")
+	check(h.state == "queue" and h.notes.has("early_fee"), "insisting can make them refuse and wait, unhappy")
+	var u = fresh()
+	u.bal["early_checkin"]["haggle_chance"]["budget"] = 1.0
+	var k = _early_guest(u, "budget")
+	u.resolve_early(k.id, "fee")
+	var c2: float = u.cash
+	u.resolve_early(k.id, "free")
+	check(is_equal_approx(u.cash, c2) and k.notes.has("early_checkin"), "waiving the fee after haggling is free")
+
+
+func test_no_early_offer_without_clean_room() -> void:
+	var s = fresh()
+	for r in s.rooms:
+		r.state = "dirty"
+	s.time = 13 * 60.0
+	var g = add_guest(s, "budget")
+	s.tick(60.0)
+	check(g.state == "queue" and g.early_state == "", "no early offer when no clean room is free")

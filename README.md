@@ -28,7 +28,10 @@ The first time you open the project, Godot spends a few seconds importing the ar
 
 - Guests line up at the front desk. Someone must be **at the desk** to check them in or out.
 - Guests check out between **7 and 11 AM** (each at their own time) and check in from
-  **3 PM**. Early arrivals wait patiently for 3 PM. The gap is your time to clean.
+  **3 PM**. The gap is your time to clean.
+- Guests who arrive early may ask to check in early (if a clean room is free). Say no,
+  charge a fee (set it under **Rates**) or let them in free. Free early check-ins earn
+  better reviews; fees earn money but annoy some guests, and some will haggle.
 - When guests check out, their room is **dirty**. Click a dirty room to go clean it.
 - You can queue several jobs: they happen in order (see the panel bottom-left).
 - Guests whose room isn't ready wait in the lobby and get grumpy. Waiting too long

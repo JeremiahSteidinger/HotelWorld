@@ -212,11 +212,12 @@ def car(name, color):
     save(img, name)
 
 
-def sign():
-    img = Image.new("RGBA", (66, 120), (0, 0, 0, 0))
+def sign(full):
+    """Roadside sign. full=False: green VACANCY with an unlit NO. full=True: red neon NO VACANCY."""
+    img = Image.new("RGBA", (80, 120), (0, 0, 0, 0))
     dr = ImageDraw.Draw(img)
-    dr.rectangle([30, 40, 35, 118], fill=(90, 90, 100, 255))
-    dr.rounded_rectangle([2, 2, 63, 44], 6, fill=(40, 40, 60, 255), outline=(255, 90, 120, 255), width=3)
+    dr.rectangle([37, 40, 42, 118], fill=(90, 90, 100, 255))
+    dr.rounded_rectangle([2, 2, 77, 44], 6, fill=(40, 40, 60, 255), outline=(255, 90, 120, 255), width=3)
     # "MOTEL" in blocky pixels
     font = {
         "M": ["10001", "11011", "10101", "10001", "10001"],
@@ -225,16 +226,20 @@ def sign():
         "E": ["11111", "10000", "11110", "10000", "11111"],
         "L": ["10000", "10000", "10000", "10000", "11111"],
     }
-    x = 11
+    x = 18
     for ch in "MOTEL":
         for r, row in enumerate(font[ch]):
             for c, bit in enumerate(row):
                 if bit == "1":
                     dr.rectangle([x + c * 2, 10 + r * 2, x + c * 2 + 1, 10 + r * 2 + 1], fill=(255, 220, 90, 255))
         x += 9
-    dr.rectangle([7, 26, 58, 37], fill=(30, 120, 60, 255))
-    dr.text((12, 26), "VACANCY", fill=(150, 255, 170, 255))
-    save(img, "sign")
+    # "NO" box: dark when unlit, red neon when full
+    dr.rectangle([6, 26, 21, 37], fill=(150, 25, 35, 255) if full else (55, 45, 55, 255))
+    dr.text((8, 26), "NO", fill=(255, 225, 220, 255) if full else (90, 80, 90, 255))
+    # "VACANCY" box: green normally, red when full
+    dr.rectangle([24, 26, 73, 37], fill=(150, 25, 35, 255) if full else (30, 120, 60, 255))
+    dr.text((27, 26), "VACANCY", fill=(255, 225, 220, 255) if full else (150, 255, 170, 255))
+    save(img, "sign_full" if full else "sign")
 
 
 def tree():
@@ -272,7 +277,8 @@ car("car_red", (200, 60, 60, 255))
 car("car_blue", (60, 100, 200, 255))
 car("car_green", (70, 160, 90, 255))
 car("car_yellow", (220, 180, 60, 255))
-sign()
+sign(False)
+sign(True)
 tree()
 plant()
 ice_machine()

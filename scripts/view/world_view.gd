@@ -17,6 +17,7 @@ var _tex := {}
 var _chars := {}       # "g12" / "w3" -> CharacterView
 var _beds: Array = []
 var _cars: Array = []
+var _sign: Sprite2D
 
 
 func setup(s) -> void:
@@ -122,7 +123,7 @@ func _build_buildings() -> void:
 
 
 func _build_props() -> void:
-	_upright("sign", Vector2i(3, 5), objects, 2)
+	_sign = _upright("sign", Vector2i(3, 5), objects, 2)
 	_upright("plant", Vector2i(3, 0), objects, 2)
 	_box_sprite("ice_machine", Vector2i(4, 0), 1, 34, Layout.to_screen(Vector2(4, 0)), objects)
 	for c in [Vector2i(-2, 1), Vector2i(-3, 4), Vector2i(-2, 6), Vector2i(19, 0), Vector2i(20, 3), Vector2i(19, 5),
@@ -138,6 +139,7 @@ func _process(_delta: float) -> void:
 
 
 func _sync_rooms() -> void:
+	_sign.texture = tex("sign" if sim.has_vacancy() else "sign_full")
 	for r in sim.rooms:
 		_beds[r.index].texture = tex("bed_messy" if r.state == "dirty" else "bed_clean")
 		var has_guest: bool = r.guest_id != -1 and sim.guests.has(r.guest_id) and sim.guests[r.guest_id].state in ["staying", "to_room", "waiting_room"]
