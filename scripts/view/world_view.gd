@@ -10,7 +10,6 @@ const CAR_COLORS := ["car_red", "car_blue", "car_green", "car_yellow"]
 
 var sim
 var ground := Node2D.new()
-var walls := Node2D.new()
 var objects := Node2D.new()
 var overlay: Node2D
 var _tex := {}
@@ -25,14 +24,12 @@ func setup(s) -> void:
 	for c in get_children():
 		c.queue_free()
 	ground = Node2D.new()
-	walls = Node2D.new()
 	objects = Node2D.new()
 	objects.y_sort_enabled = true
 	overlay = RoomOverlay.new()
 	overlay.sim = sim
 	overlay.z_index = 50
 	add_child(ground)
-	add_child(walls)
 	add_child(objects)
 	add_child(overlay)
 	_chars = {}
@@ -109,11 +106,24 @@ func _upright(tex_name: String, cell: Vector2i, parent: Node2D, foot := 4) -> Sp
 	return s
 
 
+## Building shells are y-sorted with the furniture and characters, so a wall hides whatever
+## stands behind it (the bed in the room next door, the ice machine, trees behind the motel).
+## Each shell sorts just before the frontmost cell behind its back walls, i.e. its own origin.
+func _wall_sort(origin: Vector2i) -> Vector2:
+	return Layout.to_screen(Vector2(origin)) - Vector2(0, 0.5)
+
+
 func _build_buildings() -> void:
-	_box_sprite("lobby_shell", Vector2i(0, 0), 5, 56, Vector2.ZERO, walls)
+	# The lobby sorts a little earlier than its origin so the tree just past its back-left wall
+	# (at grid (-2, 1), level with the origin) still ends up behind it.
+	_box_sprite("lobby_shell", Vector2i(0, 0), 5, 56, Vector2(0, 8), objects)
 	_box_sprite("desk", Vector2i(1, 1), 1, 22, Layout.to_screen(Vector2(1.5, 1.0)), objects)
 	for i in Layout.ROOM_COUNT:
-		_box_sprite("room_shell", Layout.room_origin(i), 2, 56, Vector2.ZERO, walls)
+		var origin := Layout.room_origin(i)
+		_box_sprite("room_shell", origin, 2, 56, _wall_sort(origin), objects)
+		if i == Layout.ROOM_COUNT - 1:
+			# The motel's end wall: the next room's partition covers this for every other room.
+			_box_sprite("room_side", origin, 2, 56, _wall_sort(origin + Vector2i(2, 0)), objects)
 		var bed := _box_sprite("bed_clean", Layout.room_bed(i), 1, 18, Layout.to_screen(Vector2(Layout.room_bed(i))), objects)
 		_beds.append(bed)
 		var car_cell := Vector2i(5 + 2 * i, 4)
