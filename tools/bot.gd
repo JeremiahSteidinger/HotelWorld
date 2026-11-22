@@ -6,9 +6,13 @@ static func play(sim, strategy: String) -> void:
 	if strategy == "idle":
 		for g in sim.pending_discounts():
 			sim.resolve_discount(g.id, false)
+		for g in sim.pending_early():
+			sim.resolve_early(g.id, "no")
 		return
 	for g in sim.pending_discounts():
 		sim.resolve_discount(g.id, g.discount_pct <= 20)
+	for g in sim.pending_early():
+		sim.resolve_early(g.id, "fee" if g.early_state == "asking" else "free")
 	if strategy == "pro":
 		# Price rooms at what the typical guest will pay, given the current rating.
 		sim.set_rate("single", (sim.willingness("budget") * 0.5 + sim.willingness("business") * 0.5) * 0.92)

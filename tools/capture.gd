@@ -20,6 +20,8 @@ var shots := [
 	[280, "day_report", 0.0, "report"],
 	[320, "discount", 0.0, "discount"],
 	[360, "no_vacancy", 0.0, "fill"],
+	[400, "early_ask", 0.0, "early"],
+	[440, "early_haggle", 0.0, "haggle"],
 ]
 
 
@@ -61,6 +63,15 @@ func _act(action: String, minutes: float) -> void:
 		"report":
 			if not main.sim.reports.is_empty():
 				ui.show_report(main.sim.reports[-1])
+		"early", "haggle":
+			ui.close_modal()
+			for gid in main.sim.guests:
+				var g = main.sim.guests[gid]
+				if g.state == "staying":
+					g.state = "early_request"
+					g.early_state = "asking" if action == "early" else "haggling"
+					ui._show_early(g)
+					break
 		"fill":
 			ui.close_modal()
 			for r in main.sim.rooms:

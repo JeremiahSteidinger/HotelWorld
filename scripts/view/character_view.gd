@@ -59,6 +59,9 @@ func sync_guest(g, sim) -> void:
 			_bar_color = Color(0.9, 0.6, 0.2)
 			_bubble = "ROOM?"
 			_bubble_color = Color(1.0, 0.6, 0.3)
+		"early_request":
+			_bubble = "EARLY?"
+			_bubble_color = Color(0.7, 0.9, 1.0)
 		"discount":
 			_bubble = "%d%% OFF?" % g.discount_pct
 			_bubble_color = Color(1.0, 0.85, 0.3)

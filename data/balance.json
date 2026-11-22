@@ -113,5 +113,26 @@
     "window": 20,
     "prior_weight": 5
   },
-  "checkin_hour": 15
+  "checkin_hour": 15,
+  "early_checkin": {
+    "_comment": "Guests who arrive before check-in time can ask to check in early if a clean room is free.",
+    "default_fee": 20,
+    "free_bonus": 12,
+    "paid_bonus": 6,
+    "fee_mood_per_dollar": 0.25,
+    "refuse_mood": -5,
+    "insist_mood": -8,
+    "declined_fee_mood": -12,
+    "haggle_chance": {
+      "budget": 0.7,
+      "family": 0.5,
+      "business": 0.2
+    },
+    "pay_after_insist_chance": {
+      "budget": 0.4,
+      "family": 0.6,
+      "business": 0.9
+    },
+    "timeout": 30
+  }
 }

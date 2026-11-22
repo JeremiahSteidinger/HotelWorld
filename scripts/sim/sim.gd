@@ -29,6 +29,7 @@ var mode := "campaign"  # or "sandbox"
 var time := 0.0
 var cash := 0.0
 var rates := {}
+var early_fee := 20.0   # player-set early check-in fee
 var rooms: Array = []
 var guests := {}        # id -> Guest
 var workers: Array = []
@@ -69,6 +70,7 @@ func new_game(balance: Dictionary, game_mode := "campaign", seed_value := -1) ->
 	rates = {}
 	for t in bal["room_types"]:
 		rates[t] = float(bal["room_types"][t]["default_rate"])
+	early_fee = float(bal["early_checkin"]["default_fee"])
 	rooms = []
 	var types: Array = bal["rooms"]
 	for i in types.size():
@@ -205,6 +207,86 @@ func has_vacancy() -> bool:
 	return false
 
 
+func clean_room_free(room_type: String) -> bool:
+	for r in rooms:
+		if r.type == room_type and r.guest_id == -1 and r.state == "clean":
+			return true
+	return false
+
+
+## An early guest the desk can talk to about early check-in (not asked yet, and a clean room is free).
+func can_offer_early(g) -> bool:
+	return is_early(g) and g.early_state == "" and clean_room_free(g.room_type)
+
+
+func pending_early() -> Array:
+	var out := []
+	for gid in guests:
+		if guests[gid].state == "early_request":
+			out.append(guests[gid])
+	return out
+
+
+func set_early_fee(value: float) -> void:
+	early_fee = clampf(roundf(value), 0.0, 200.0)
+
+
+## Player's answer to an early check-in request. choice: "no", "fee" or "free".
+func resolve_early(guest_id: int, choice: String) -> void:
+	if not guests.has(guest_id):
+		return
+	var g = guests[guest_id]
+	if g.state != "early_request":
+		return
+	var e: Dictionary = bal["early_checkin"]
+	var haggling: bool = g.early_state == "haggling"
+	match choice:
+		"free":
+			g.note("early_checkin", e["free_bonus"])
+			_event("checkin", "%s gets an early check-in, free of charge." % g.name, {"guest": g.id})
+			_start_early_checkin(g)
+		"fee":
+			if early_fee <= 0.0:
+				resolve_early(guest_id, "free")
+				return
+			if not haggling and rng.randf() < e["haggle_chance"].get(g.archetype, 0.5):
+				g.early_state = "haggling"
+				g.discount_timer = 0.0
+				_event("early", "%s asks if you could waive the $%d early check-in fee." % [g.name, int(early_fee)], {"guest": g.id})
+				return
+			if haggling and rng.randf() > e["pay_after_insist_chance"].get(g.archetype, 0.5):
+				g.note("early_fee", e["declined_fee_mood"])
+				_event("angry", "%s won't pay the early fee and will wait for 3 PM." % g.name, {"guest": g.id})
+				_back_to_line(g)
+				return
+			g.note("early_checkin", e["paid_bonus"])
+			g.note("early_fee", -early_fee * e["fee_mood_per_dollar"] + (e["insist_mood"] if haggling else 0.0))
+			g.early_fee = early_fee
+			cash += early_fee
+			ledger["revenue"] += early_fee
+			_event("checkin", "%s paid $%d to check in early." % [g.name, int(early_fee)], {"guest": g.id})
+			_start_early_checkin(g)
+		_:
+			g.note("no_early", e["refuse_mood"])
+			_event("info", "%s will wait for 3 PM check-in." % g.name)
+			_back_to_line(g)
+
+
+func _start_early_checkin(g) -> void:
+	g.early_state = "done"
+	g.state = "at_desk"
+	for w in workers:
+		if w.serving == g.id:
+			w.progress = 0.0
+
+
+func _back_to_line(g) -> void:
+	g.early_state = "done"
+	_release_desk_for(g)
+	g.state = "queue"
+	queue.push_front(g.id)
+
+
 func free_rooms_for(room_type: String) -> int:
 	var n := 0
 	for r in rooms:
@@ -212,7 +294,7 @@ func free_rooms_for(room_type: String) -> int:
 			n += 1
 	for gid in guests:
 		var g = guests[gid]
-		if g.purpose == "checkin" and g.room == -1 and g.room_type == room_type and g.state in ["queue", "to_desk", "at_desk", "discount"]:
+		if g.purpose == "checkin" and g.room == -1 and g.room_type == room_type and g.state in ["queue", "to_desk", "at_desk", "discount", "early_request"]:
 			n -= 1
 	return n
 
@@ -507,6 +589,10 @@ func _update_guest(g, dt: float) -> void:
 		"staying":
 			if day() > g.checkout_day or (day() == g.checkout_day and minute_of_day() >= g.checkout_minute):
 				_start_checkout(g)
+		"early_request":
+			g.discount_timer += dt
+			if g.discount_timer > bal["early_checkin"]["timeout"]:
+				resolve_early(g.id, "no")
 		"discount":
 			g.discount_timer += dt
 			if g.discount_timer > bal["discount"]["timeout"]:
@@ -764,7 +850,8 @@ func _do_desk(w, dt: float) -> void:
 			return
 		var next := -1
 		for i in queue.size():
-			if not is_early(guests[queue[i]]):
+			var cand = guests[queue[i]]
+			if not is_early(cand) or can_offer_early(cand):
 				next = i
 				break
 		if next != -1:
@@ -780,6 +867,15 @@ func _do_desk(w, dt: float) -> void:
 		return
 	var g = guests[w.serving]
 	if g.state != "at_desk":
+		return
+	if is_early(g) and g.early_state == "":
+		# Guest is here before check-in time: ask the player what to do.
+		g.state = "early_request"
+		g.early_state = "asking"
+		g.discount_timer = 0.0
+		_event("early", "%s arrived early and asks to check in now." % g.name, {"guest": g.id})
+		return
+	if is_early(g) and g.early_state != "done":
 		return
 	w.progress += dt
 	var need: float = bal["task_minutes"]["check_in" if g.purpose == "checkin" else "check_out"]
@@ -815,7 +911,7 @@ func _release_worker(w) -> void:
 			r.cleaner_id = -1
 	if w.serving != -1 and guests.has(w.serving):
 		var g = guests[w.serving]
-		if g.state in ["to_desk", "at_desk"]:
+		if g.state in ["to_desk", "at_desk", "early_request"]:
 			g.state = "queue"
 			queue.push_front(g.id)
 	w.serving = -1
@@ -902,7 +998,7 @@ func _refresh_candidates() -> void:
 
 func to_save() -> Dictionary:
 	var data := {
-		"version": SAVE_VERSION, "mode": mode, "time": time, "cash": cash, "rates": rates,
+		"version": SAVE_VERSION, "mode": mode, "time": time, "cash": cash, "rates": rates, "early_fee": early_fee,
 		"queue": queue, "stations": stations, "reviews": reviews, "arrivals": arrivals,
 		"candidates": candidates, "ledger": ledger, "reports": reports, "stats": stats,
 		"next_id": next_id, "neg_days": neg_days, "game_over": game_over, "rng_state": rng.state,
@@ -919,6 +1015,7 @@ func from_save(balance: Dictionary, data: Dictionary) -> void:
 			"candidates", "ledger", "reports", "stats", "next_id", "neg_days", "game_over"]:
 		set(k, data[k])
 	rng.state = data["rng_state"]
+	early_fee = data.get("early_fee", float(bal["early_checkin"]["default_fee"]))
 	rooms = data["rooms"].map(func(d): return dict_to_inst(d))
 	workers = data["workers"].map(func(d): return dict_to_inst(d))
 	guests = {}

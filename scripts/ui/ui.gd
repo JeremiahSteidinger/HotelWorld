@@ -336,6 +336,19 @@ func show_rates() -> void:
 		var hi: float = expect[t][1]
 		var hint := "Guests expect about $%d" % int(lo) if absf(hi - lo) < 1.0 else "Guests expect $%d-$%d" % [int(lo), int(hi)]
 		_text(row, "  " + hint, 13, Color(0.75, 0.85, 0.75))
+	var erow := HBoxContainer.new()
+	v.add_child(erow)
+	var el := _text(erow, "Early check-in fee")
+	el.custom_minimum_size = Vector2(170, 0)
+	var espin := SpinBox.new()
+	espin.min_value = 0
+	espin.max_value = 200
+	espin.prefix = "$"
+	espin.value = sim.early_fee
+	espin.custom_minimum_size = Vector2(150, 0)
+	espin.value_changed.connect(func(val): sim.set_early_fee(val))
+	erow.add_child(espin)
+	_text(erow, "  offered when guests arrive before 3 PM ($0 = always free)", 13, Color(0.75, 0.85, 0.75))
 	_text(v, "Daily upkeep: $%d (utilities, laundry, supplies)." % int(sim.daily_upkeep()), 13, Color(0.8, 0.8, 0.85))
 
 
@@ -409,6 +422,7 @@ func show_help() -> void:
 
 - Guests line up at the front desk. Someone has to be AT the desk to check them in or out.
 - Check-out is between 7 and 11 AM. Check-in opens at 3 PM. Use the time in between to clean.
+- Early birds may ask to check in early: say no, charge a fee (set it under Rates), or let them in free. Some will haggle.
 - When guests check out, their room is dirty. Click a dirty room to go clean it.
 - If a guest checks in before their room is clean, they wait in the lobby and get grumpy.
 - Waiting too long ruins the mood. Unhappy guests ask for discounts and leave bad reviews.
@@ -485,6 +499,9 @@ func _next_popup() -> void:
 		if sim.guests.has(gid) and sim.guests[gid].state == "discount":
 			_show_discount(sim.guests[gid])
 			return
+		if sim.guests.has(gid) and sim.guests[gid].state == "early_request":
+			_show_early(sim.guests[gid])
+			return
 	if not _reports.is_empty():
 		show_report(_reports.pop_front())
 
@@ -507,6 +524,27 @@ func _show_discount(g) -> void:
 	var gid: int = g.id
 	_button(row, "Give %d%% off" % g.discount_pct, func(): sim.resolve_discount(gid, true); close_modal())
 	_button(row, "Refuse", func(): sim.resolve_discount(gid, false); close_modal())
+
+
+func _show_early(g) -> void:
+	var haggling: bool = g.early_state == "haggling"
+	var v := _open("early", "Early check-in" if not haggling else "Guest is haggling", false, 500)
+	var arch: String = sim.bal["archetypes"][g.archetype]["name"]
+	if haggling:
+		_text(v, "%s (%s): \"Any chance you could waive that $%d fee? We've been driving all day.\"" % [g.name, arch, int(sim.early_fee)])
+		_text(v, "Insisting on the fee might make them pay grudgingly, or walk back to the line and wait.", 13, Color(0.8, 0.8, 0.85))
+	else:
+		_text(v, "%s (%s) arrived at %s, before the 3 PM check-in, and asks to check in now. A clean room is free." % [g.name, arch, sim.clock_text()])
+		_text(v, "Early check-in makes guests happier. A fee earns money, but some guests hate fees and may haggle.", 13, Color(0.8, 0.8, 0.85))
+	_text(v, "Fun fact: this guest %s." % g.quirk, 13, Color(0.75, 0.75, 0.8))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	v.add_child(row)
+	var gid: int = g.id
+	_button(row, "No, wait until 3 PM", func(): sim.resolve_early(gid, "no"); close_modal())
+	if sim.early_fee > 0.0:
+		_button(row, ("Fee stands ($%d)" if haggling else "Yes, for a $%d fee") % int(sim.early_fee), func(): sim.resolve_early(gid, "fee"); close_modal())
+	_button(row, "Waive the fee" if haggling else "Yes, free", func(): sim.resolve_early(gid, "free"); close_modal())
 
 
 func show_game_over(text: String) -> void:
