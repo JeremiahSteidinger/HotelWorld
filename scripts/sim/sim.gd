@@ -579,11 +579,11 @@ func _update_guest(g, dt: float) -> void:
 			var r = rooms[g.room]
 			if r.state == "clean":
 				g.state = "to_room"
-				_go(g, Layout.room_bed(g.room))
+				_go(g, Layout.room_stay_spot(g.room))
 			elif g.wait > g.patience * 1.5:
 				_refund_and_leave(g)
 		"to_room":
-			if _at(g, Layout.room_bed(g.room)):
+			if _at(g, Layout.room_stay_spot(g.room)):
 				g.state = "staying"
 				rooms[g.room].state = "occupied"
 		"staying":
@@ -745,7 +745,7 @@ func _finish_checkin(g) -> void:
 	var r = rooms[g.room]
 	if r.state == "clean":
 		g.state = "to_room"
-		_go(g, Layout.room_bed(g.room))
+		_go(g, Layout.room_stay_spot(g.room))
 		_event("checkin", "%s checked in to room %d for $%d." % [g.name, g.room + 1, int(price)], {"guest": g.id})
 	else:
 		g.state = "waiting_room"

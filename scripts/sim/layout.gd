@@ -65,6 +65,16 @@ static func room_beds(i: int, count: int) -> Array[Vector2i]:
 	return cells
 
 
+## Where a guest settles while staying: the front-right cell, at the foot of the bed.
+static func room_stay_spot(i: int) -> Vector2i:
+	return Vector2i(6 + 2 * i, 1)
+
+
+## Where a staying guest's luggage sits: by the side wall, just inside the door.
+static func room_luggage_pos(i: int) -> Vector2:
+	return Vector2(5.25 + 2 * i, 1.35)
+
+
 static func room_work_spot(i: int) -> Vector2i:
 	return Vector2i(6 + 2 * i, 1)
 

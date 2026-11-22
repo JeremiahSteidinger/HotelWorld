@@ -17,6 +17,8 @@ var _tex := {}
 var _chars := {}       # "g12" / "w3" -> CharacterView
 var _beds: Array = []
 var _cars: Array = []
+var _windows: Array = []   # lit window per room, shown while occupied
+var _luggage: Array = []   # luggage sprite per room, texture follows the guest type
 var _sign: Sprite2D
 
 
@@ -38,6 +40,8 @@ func setup(s) -> void:
 	_chars = {}
 	_beds = []
 	_cars = []
+	_windows = []
+	_luggage = []
 	_build_ground()
 	_build_buildings()
 	_build_props()
@@ -114,6 +118,17 @@ func _build_buildings() -> void:
 	_box_sprite("desk", Vector2i(1, 1), 1, 22, Layout.to_screen(Vector2(1.5, 1.0)), objects)
 	for i in Layout.ROOM_COUNT:
 		_box_sprite("room_shell", Layout.room_origin(i), 2, 56, Vector2.ZERO, walls)
+		var win := _box_sprite("window_lit", Layout.room_origin(i), 2, 56, Vector2.ZERO, walls)
+		win.visible = false
+		_windows.append(win)
+		var bag := Sprite2D.new()
+		bag.texture = tex("luggage_family")
+		bag.centered = false
+		bag.position = Layout.to_screen(Layout.room_luggage_pos(i))
+		bag.offset = Vector2(-13, -21)
+		bag.visible = false
+		objects.add_child(bag)
+		_luggage.append(bag)
 		var room_beds: Array = []
 		for cell in Layout.room_beds(i, _bed_count(i)):
 			room_beds.append(_box_sprite("bed_clean", cell, 1, 18, Layout.to_screen(Vector2(cell)), objects))
@@ -152,8 +167,15 @@ func _sync_rooms() -> void:
 	for r in sim.rooms:
 		for bed in _beds[r.index]:
 			bed.texture = tex("bed_messy" if r.state == "dirty" else "bed_clean")
-		var has_guest: bool = r.guest_id != -1 and sim.guests.has(r.guest_id) and sim.guests[r.guest_id].state in ["staying", "to_room", "waiting_room"]
-		_cars[r.index].visible = has_guest and sim.guests[r.guest_id].archetype != "budget"
+		var g = sim.guests.get(r.guest_id) if r.guest_id != -1 else null
+		var has_guest: bool = g != null and g.state in ["staying", "to_room", "waiting_room"]
+		_cars[r.index].visible = has_guest and g.archetype != "budget"
+		# Moved in: lights on, curtains drawn, bags on the floor.
+		var moved_in: bool = r.state == "occupied" and g != null and g.state == "staying"
+		_windows[r.index].visible = moved_in
+		_luggage[r.index].visible = moved_in
+		if moved_in:
+			_luggage[r.index].texture = tex("luggage_" + g.archetype)
 
 
 func _sync_characters() -> void:
@@ -163,7 +185,6 @@ func _sync_characters() -> void:
 		var key := "g%d" % gid
 		seen[key] = true
 		var v = _view(key, "guest_" + g.archetype)
-		v.visible = g.state != "staying"
 		v.sync_guest(g, sim)
 	for w in sim.workers:
 		var key := "w%d" % w.id

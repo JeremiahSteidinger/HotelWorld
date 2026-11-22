@@ -65,6 +65,11 @@ func sync_guest(g, sim) -> void:
 		"discount":
 			_bubble = "%d%% OFF?" % g.discount_pct
 			_bubble_color = Color(1.0, 0.85, 0.3)
+		"staying":
+			var m: float = sim.minute_of_day()
+			if m >= 22 * 60 or m < 6 * 60:
+				_bubble = "z z"
+				_bubble_color = Color(0.75, 0.8, 1.0)
 		"leaving":
 			_mood = g.mood
 	queue_redraw()

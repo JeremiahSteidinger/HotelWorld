@@ -386,5 +386,53 @@ def icon():
     save(img, "icon")
 
 
+def window_lit():
+    """Same canvas as room_shell: the back window with the lights on and curtains half drawn."""
+    img, dr, ox, oy = canvas(2, 2, WALL_H)
+    x0, y0 = iso(1, 0, ox, oy)
+    frame = (90, 70, 50, 255)
+    dr.polygon([(x0 - 12, y0 - 18), (x0 + 12, y0 - 6), (x0 + 12, y0 - 30), (x0 - 12, y0 - 42)],
+               fill=(255, 214, 120, 255), outline=frame)
+    curtain = (196, 92, 84, 255)
+    for (a, b) in [(-11, -5), (5, 11)]:
+        # vertical strips that follow the wall's slope (y rises 1px per 2px of x)
+        dr.polygon([(x0 + a, y0 - 41 + (a + 12) // 2), (x0 + b, y0 - 41 + (b + 12) // 2),
+                    (x0 + b, y0 - 19 + (b + 12) // 2), (x0 + a, y0 - 19 + (a + 12) // 2)], fill=curtain)
+    dr.line([(x0, y0 - 12), (x0, y0 - 36)], fill=frame)
+    save(img, "window_lit")
+
+
+def luggage(kind):
+    """Small upright props left in an occupied room."""
+    img = Image.new("RGBA", (26, 24), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    dr.ellipse([2, 19, 23, 23], fill=(0, 0, 0, 60))
+
+    def case(x, y, w, h, col):
+        dr.rectangle([x, y, x + w, y + h], fill=col, outline=shade(col, 0.55))
+        dr.rectangle([x + w // 2 - 2, y - 3, x + w // 2 + 2, y - 1], outline=(50, 50, 56, 255))
+        dr.line([(x + 2, y + h // 2), (x + w - 2, y + h // 2)], fill=shade(col, 0.75))
+
+    if kind == "budget":       # a stuffed backpack slumped on the floor
+        dr.rounded_rectangle([7, 7, 19, 21], 4, fill=(200, 140, 40, 255), outline=(130, 88, 24, 255))
+        dr.rounded_rectangle([9, 13, 17, 19], 2, fill=(170, 116, 32, 255))
+        dr.line([(9, 7), (11, 3), (15, 3), (17, 7)], fill=(130, 88, 24, 255), width=2)
+    elif kind == "business":   # rolling carry-on with the handle up
+        dr.line([(10, 1), (10, 9)], fill=(70, 70, 78, 255), width=1)
+        dr.line([(16, 1), (16, 9)], fill=(70, 70, 78, 255), width=1)
+        dr.line([(10, 1), (16, 1)], fill=(70, 70, 78, 255), width=2)
+        dr.rectangle([7, 9, 19, 20], fill=(52, 58, 80, 255), outline=(30, 32, 44, 255))
+        dr.line([(9, 12), (17, 12)], fill=(80, 88, 116, 255))
+        dr.point([(9, 21), (17, 21)], fill=(20, 20, 24, 255))
+    else:                      # family: a big suitcase and a small one
+        case(1, 8, 13, 12, (60, 130, 110, 255))
+        case(14, 12, 9, 8, (230, 120, 60, 255))
+    outline(img)
+    save(img, "luggage_" + kind)
+
+
 icon()
+window_lit()
+for k in ("budget", "business", "family"):
+    luggage(k)
 print("art written to", os.path.abspath(OUT))
