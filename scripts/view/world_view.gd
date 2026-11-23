@@ -1,5 +1,5 @@
 extends Node2D
-## Draws the motel: ground tiles, building shells, furniture, cars and characters.
+## Draws one property: ground tiles, building shells, furniture, cars and characters.
 ## Reads simulation state every frame; never changes it.
 
 const Layout := preload("res://scripts/sim/layout.gd")
@@ -8,7 +8,8 @@ const RoomOverlay := preload("res://scripts/view/room_overlay.gd")
 
 const CAR_COLORS := ["car_red", "car_blue", "car_green", "car_yellow"]
 
-var sim
+var sim                # the Property being shown
+var L                  # its Layout
 var ground := Node2D.new()
 var objects := Node2D.new()
 var overlay: Node2D
@@ -23,6 +24,7 @@ var _sign: Sprite2D
 
 func setup(s) -> void:
 	sim = s
+	L = s.layout
 	for c in get_children():
 		c.queue_free()
 	ground = Node2D.new()
@@ -55,9 +57,11 @@ static func top(c: Vector2i) -> Vector2:
 
 
 func _ground_tile(c: Vector2i) -> String:
-	if Layout.LOBBY.has_point(c):
+	if L.kind == "hotel":
+		return _hotel_tile(c)
+	if L.in_lobby(c):
 		return "tile_lobby"
-	if Layout.cell_to_room(c) >= 0:
+	if L.cell_to_room(c) >= 0:
 		return "tile_carpet"
 	if c.y == 9:
 		return "tile_road"
@@ -79,9 +83,31 @@ func _ground_tile(c: Vector2i) -> String:
 	return "tile_grass"
 
 
+func _hotel_tile(c: Vector2i) -> String:
+	if L.in_lobby(c):
+		return "tile_marble"
+	if L.cell_to_room(c) >= 0:
+		return "tile_carpet"
+	if L.zone(c) == "hall":
+		return "tile_hall"
+	match c.y:
+		10, 12:
+			return "tile_road"
+		11:
+			return "tile_road_line"
+		9:
+			return "tile_concrete"
+		5:
+			if c.x <= 21:
+				return "tile_concrete"
+	if c.y >= 6 and c.y <= 8 and c.x >= 6 and c.x <= 21:
+		return "tile_parking" if c.y == 7 else "tile_asphalt"
+	return "tile_grass"
+
+
 func _build_ground() -> void:
-	for y in range(-4, 13):
-		for x in range(-6, 24):
+	for y in range(-4, L.h + 5):
+		for x in range(-6, L.w + 6):
 			var c := Vector2i(x, y)
 			var s := Sprite2D.new()
 			s.texture = tex(_ground_tile(c))
@@ -118,33 +144,48 @@ func _wall_sort(origin: Vector2i) -> Vector2:
 
 
 func _build_buildings() -> void:
+	var hotel: bool = L.kind == "hotel"
 	# The lobby sorts a little earlier than its origin so the tree just past its back-left wall
 	# (at grid (-2, 1), level with the origin) still ends up behind it.
-	_box_sprite("lobby_shell", Vector2i(0, 0), 5, 56, Vector2(0, 8), objects)
-	_box_sprite("desk", Vector2i(1, 1), 1, 22, Layout.to_screen(Vector2(1.5, 1.0)), objects)
-	for i in Layout.ROOM_COUNT:
-		var origin := Layout.room_origin(i)
-		_box_sprite("room_shell", origin, 2, 56, _wall_sort(origin), objects)
+	_box_sprite("hotel_lobby_shell" if hotel else "lobby_shell", Vector2i(0, 0), 5, 56, Vector2(0, 8), objects)
+	if hotel:
+		_box_sprite("desk3", Vector2i(1, 1), 1, 22, Layout.to_screen(Vector2(2.0, 1.0)), objects)
+	else:
+		_box_sprite("desk", Vector2i(1, 1), 1, 22, Layout.to_screen(Vector2(1.5, 1.0)), objects)
+	for i in L.room_count():
+		var origin: Vector2i = L.room_origin(i)
+		var front: bool = L.is_front_room(i)
+		var shell := "room_shell"
+		if hotel:
+			shell = "hotel_room_shell_front" if front else "hotel_room_shell"
+		_box_sprite(shell, origin, 2, 56, _wall_sort(origin), objects)
 		# Same sort point as the shell and added after it, so the lit window paints over its wall.
-		var win := _box_sprite("window_lit", origin, 2, 56, _wall_sort(origin), objects)
-		win.visible = false
+		# Front-row hotel rooms have cut-away walls and no window.
+		var win: Sprite2D = null
+		if not front:
+			win = _box_sprite("window_lit", origin, 2, 56, _wall_sort(origin), objects)
+			win.visible = false
 		_windows.append(win)
 		var bag := Sprite2D.new()
 		bag.texture = tex("luggage_family")
 		bag.centered = false
-		bag.position = Layout.to_screen(Layout.room_luggage_pos(i))
+		bag.position = Layout.to_screen(L.room_luggage_pos(i))
 		bag.offset = Vector2(-13, -21)
 		bag.visible = false
 		objects.add_child(bag)
 		_luggage.append(bag)
 		var room_beds: Array = []
-		for cell in Layout.room_beds(i, _bed_count(i)):
+		for cell in L.room_beds(i, _bed_count(i)):
 			room_beds.append(_box_sprite("bed_clean", cell, 1, 18, Layout.to_screen(Vector2(cell)), objects))
 		_beds.append(room_beds)
-		if i == Layout.ROOM_COUNT - 1:
-			# The motel's end wall: the next room's partition covers this for every other room.
+		if sim.rooms[i].type == "suite":
+			# The room's free corner: not the door, bed or work spot.
+			var chair_cell := Vector2i(origin.x, origin.y + 1) if front else origin
+			_box_sprite("armchair", chair_cell, 1, 16, Layout.to_screen(Vector2(chair_cell)), objects)
+		if i == L.room_count() - 1 or (hotel and i == L.room_count() / 2 - 1):
+			# The end wall of a row: the next room's partition covers this for every other room.
 			_box_sprite("room_side", origin, 2, 56, _wall_sort(origin + Vector2i(2, 0)), objects)
-		var car_cell := Vector2i(5 + 2 * i, 4)
+		var car_cell := Vector2i(7 + i, 6 if i % 2 == 0 else 8) if hotel else Vector2i(5 + 2 * i, 4)
 		var car := _box_sprite(CAR_COLORS[i % CAR_COLORS.size()], car_cell, 1, 22, Layout.to_screen(Vector2(car_cell)), objects)
 		car.visible = false
 		_cars.append(car)
@@ -158,11 +199,20 @@ func _bed_count(i: int) -> int:
 
 
 func _build_props() -> void:
-	_sign = _upright("sign", Vector2i(3, 5), objects, 2)
-	_upright("plant", Vector2i(3, 0), objects, 2)
-	_box_sprite("ice_machine", Vector2i(4, 0), 1, 34, Layout.to_screen(Vector2(4, 0)), objects)
-	for c in [Vector2i(-2, 1), Vector2i(-3, 4), Vector2i(-2, 6), Vector2i(19, 0), Vector2i(20, 3), Vector2i(19, 5),
-			Vector2i(8, -2), Vector2i(13, -3), Vector2i(-4, -1), Vector2i(1, -3), Vector2i(22, 6)]:
+	var trees: Array
+	if L.kind == "hotel":
+		_sign = _upright("hotel_sign", Vector2i(2, 7), objects, 2)
+		_upright("plant", Vector2i(5, 0), objects, 2)
+		_upright("plant", Vector2i(0, 1), objects, 2)
+		trees = [Vector2i(-2, 1), Vector2i(-3, 4), Vector2i(-2, 7), Vector2i(23, 0), Vector2i(24, 3), Vector2i(23, 6),
+			Vector2i(10, -2), Vector2i(16, -3), Vector2i(-4, -1), Vector2i(2, -3), Vector2i(26, 8), Vector2i(4, 7), Vector2i(1, 8)]
+	else:
+		_sign = _upright("sign", Vector2i(3, 5), objects, 2)
+		_upright("plant", Vector2i(3, 0), objects, 2)
+		_box_sprite("ice_machine", Vector2i(4, 0), 1, 34, Layout.to_screen(Vector2(4, 0)), objects)
+		trees = [Vector2i(-2, 1), Vector2i(-3, 4), Vector2i(-2, 6), Vector2i(19, 0), Vector2i(20, 3), Vector2i(19, 5),
+			Vector2i(8, -2), Vector2i(13, -3), Vector2i(-4, -1), Vector2i(1, -3), Vector2i(22, 6)]
+	for c in trees:
 		_upright("tree", c, objects, 4)
 
 
@@ -174,7 +224,8 @@ func _process(_delta: float) -> void:
 
 
 func _sync_rooms() -> void:
-	_sign.texture = tex("sign" if sim.has_vacancy() else "sign_full")
+	var sign_name := "hotel_sign" if L.kind == "hotel" else "sign"
+	_sign.texture = tex(sign_name if sim.has_vacancy() else sign_name + "_full")
 	for r in sim.rooms:
 		var g = sim.guests.get(r.guest_id) if r.guest_id != -1 else null
 		var asleep: bool = g != null and g.state == "staying" and g.asleep
@@ -189,8 +240,9 @@ func _sync_rooms() -> void:
 		_cars[r.index].visible = has_guest and g.archetype != "budget"
 		# Moved in: lights on, curtains drawn, bags on the floor.
 		var moved_in: bool = r.state == "occupied" and g != null and g.state == "staying"
-		_windows[r.index].visible = moved_in
-		_windows[r.index].texture = tex("window_closed" if asleep else "window_lit")
+		if _windows[r.index] != null:
+			_windows[r.index].visible = moved_in
+			_windows[r.index].texture = tex("window_closed" if asleep else "window_lit")
 		_luggage[r.index].visible = moved_in
 		if moved_in:
 			_luggage[r.index].texture = tex("luggage_" + g.archetype)
@@ -205,6 +257,8 @@ func _sync_characters() -> void:
 		var v = _view(key, "guest_" + g.archetype)
 		v.sync_guest(g, sim)
 	for w in sim.workers:
+		if not w.present:
+			continue
 		var key := "w%d" % w.id
 		seen[key] = true
 		var v = _view(key, w.role)
