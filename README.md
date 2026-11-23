@@ -57,6 +57,13 @@ The first time you open the project, Godot spends a few seconds importing the ar
   days. Pay early to save interest. **Properties**: what you own and what's for sale.
 - With two properties, the tabs under the top bar (or **Tab**) switch which one you see.
   You can only be at one: jobs at the other one make you drive over (40 game minutes).
+- **Sharing maintenance techs**: tick **Share** next to a tech in the Staff window and they'll
+  drive to your other property when something breaks there and nobody on shift can fix
+  it, then head back when their home property needs them. Each trip takes 40 game minutes
+  and costs $16.80 in mileage (24 miles at $0.70), charged to the property they drive to.
+  Their wage stays with the property that hired them. They won't set off if their shift
+  ends before they could get there and do a repair, and the drive home after a shift isn't
+  reimbursed.
 - Campaign, chapter 1: turn $1,500 into $9,000 of savings (cash minus loans) within 30
   days. Chapter 2: buy the Maple Grove Hotel (20% down, the rest on a mortgage) and grow
   your net worth (cash + property values - debt) to $100,000 by day 100. Go broke three

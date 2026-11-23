@@ -305,7 +305,7 @@ func _job_text(w, p) -> String:
 			return "Cleaning room %s" % p.room_label(w.job["room"]) if w.arrived() else "Walking to room %s" % p.room_label(w.job["room"])
 		"fix":
 			return "Fixing room %s" % p.room_label(w.job["room"]) if w.arrived() else "Walking to room %s" % p.room_label(w.job["room"])
-		"travel":
+		"travel", "commute":
 			return "Walking to the car"
 	if not w.present:
 		return "Off shift"
@@ -493,8 +493,12 @@ static func _hour(h: int) -> String:
 
 
 func show_staff() -> void:
-	var v := _open("staff", _title("Staff"), true, 760)
+	var multi: bool = game.properties.size() > 1
+	var v := _open("staff", _title("Staff"), true, 940 if multi else 760)
 	_text(v, "Staff work automatically during their shift. Clerks run the front desk, housekeepers clean, maintenance techs fix broken rooms. Wages are paid every night. Staff paid below the going rate might quit.", 13)
+	if multi:
+		_text(v, "Tick \"Share\" to let a maintenance tech help at your other properties when something is broken there and nobody is on shift to fix it. The drive takes %d minutes and you pay $%.2f mileage per trip (%d miles at $%.2f). Driving home after the shift isn't reimbursed." % [
+			int(game.bal["travel_minutes"]), game.trip_cost(), int(game.bal["travel_miles"]), float(game.bal["mileage_rate"])], 12, Color(0.75, 0.85, 1.0))
 	# Who is on when: the desk needs someone from 7 AM (check-outs) until late (check-ins).
 	var cov := HBoxContainer.new()
 	v.add_child(cov)
@@ -512,11 +516,11 @@ func show_staff() -> void:
 	if sim.coverage("clerk")["evening"] == 0 or sim.coverage("clerk")["day"] == 0:
 		_text(v, "Tip: with no clerk on a shift, someone (you!) has to work the desk then, or guests walk out.", 12, Color(1, 0.75, 0.45))
 	_text(v, "Your team", 18, Color(1, 0.85, 0.6))
-	var team: Array = sim.staff()
+	var team: Array = sim.employees()
 	if team.is_empty():
 		_text(v, "Nobody yet. It's just you!", 14, Color(0.7, 0.7, 0.75))
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(720, mini(team.size(), 6) * 36)
+	scroll.custom_minimum_size = Vector2(900 if multi else 720, mini(team.size(), 6) * 36)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(scroll)
 	var list := VBoxContainer.new()
@@ -525,8 +529,8 @@ func show_staff() -> void:
 	for w in team:
 		var row := HBoxContainer.new()
 		list.add_child(row)
-		var l := _text(row, "%s - %s" % [w.name, sim.bal["staff"][w.role]["name"]])
-		l.custom_minimum_size = Vector2(250, 0)
+		var l := _text(row, "%s - %s%s" % [w.name, sim.bal["staff"][w.role]["name"], _away_text(w)])
+		l.custom_minimum_size = Vector2(250 if not multi else 410, 0)
 		var opt := OptionButton.new()
 		var shifts: Array = sim.bal["shifts"].keys()
 		for i in shifts.size():
@@ -541,6 +545,13 @@ func show_staff() -> void:
 		row.add_child(spin)
 		var market: float = sim.bal["staff"][w.role]["market_wage"]
 		_text(row, " rate $%d " % int(market), 12, Color(0.7, 0.8, 0.7))
+		if multi and game.can_share(w.role):
+			var share := CheckBox.new()
+			share.text = "Share"
+			share.button_pressed = w.shared
+			share.tooltip_text = "Drive to your other properties to fix things when nobody there can ($%.2f mileage a trip)." % game.trip_cost()
+			share.toggled.connect(func(on): sim.set_shared(wid, on))
+			row.add_child(share)
 		_button(row, "Let go", func(): sim.fire(wid); show_staff())
 	_text(v, "Total wages: $%d/day" % int(sim.daily_wages()), 13, Color(0.8, 0.8, 0.85))
 	v.add_child(HSeparator.new())
@@ -560,6 +571,17 @@ func show_staff() -> void:
 		b.disabled = full
 		if full:
 			b.tooltip_text = "You have as many of these as %s needs." % sim.display_name()
+
+
+## " (at Maple Grove Hotel)" for staff helping at another property right now.
+func _away_text(w) -> String:
+	var c: Dictionary = game.commute_of(w)
+	if not c.is_empty():
+		return " (driving to %s)" % game.properties[c["to"]].display_name()
+	var at: int = game.where_is(w)
+	if at >= 0 and at != w.home:
+		return " (at %s)" % game.properties[at].display_name()
+	return ""
 
 
 func show_reviews() -> void:
@@ -701,6 +723,7 @@ func show_report(report: Dictionary) -> void:
 		["Refunds & discounts", func(pr): return "-$%d" % int(pr["refunds"])],
 		["Staff wages", func(pr): return "-$%d" % int(pr["wages"])],
 		["Upkeep & repairs", func(pr): return "-$%d" % int(pr["upkeep"])],
+		["Staff mileage", func(pr): return "-$%d" % int(roundf(pr.get("mileage", 0.0)))],
 		["Net", func(pr): return "$%d" % int(pr["net"])],
 		["Check-ins / check-outs", func(pr): return "%d / %d" % [pr["checkins"], pr["checkouts"]]],
 		["Walked out", func(pr): return str(pr["walkouts"])],
@@ -709,6 +732,8 @@ func show_report(report: Dictionary) -> void:
 		["Reviews today", func(pr): return "%d (avg %.1f)" % [pr["reviews"], pr["avg_stars"]] if pr["reviews"] > 0 else "0"],
 		["Rating", func(pr): return "%.2f" % pr["rating"]],
 	]
+	if props.all(func(pr): return pr.get("mileage", 0.0) <= 0.0):
+		rows = rows.filter(func(r): return r[0] != "Staff mileage")
 	for r in rows:
 		_text(grid, r[0], 14, Color(0.8, 0.8, 0.85))
 		for pr in props:

@@ -119,6 +119,7 @@ func _new_worker(role: String, worker_name: String, wage: float):
 	w.name = worker_name
 	w.wage = wage
 	w.shift = default_shift(role)
+	w.home = index
 	w.pos = Vector2(layout.staff_spawn)
 	w.present = false
 	workers.append(w)
@@ -127,7 +128,8 @@ func _new_worker(role: String, worker_name: String, wage: float):
 
 func _reset_ledger() -> void:
 	ledger = {"revenue": 0.0, "refunds": 0.0, "wages": 0.0, "upkeep": 0.0,
-		"checkins": 0, "checkouts": 0, "walkouts": 0, "turned_away": 0, "stars": [], "repairs": 0, "breakages": 0}
+		"checkins": 0, "checkouts": 0, "walkouts": 0, "turned_away": 0, "stars": [], "repairs": 0, "breakages": 0,
+		"mileage": 0.0}
 
 
 # --------------------------------------------------------------------------- queries
@@ -187,12 +189,25 @@ func get_worker(id: int):
 	return null
 
 
+## Staff physically here right now (including staff from other properties helping out).
 func staff() -> Array:
 	return workers.filter(func(w): return w.role != "owner")
 
 
+## Staff this property employs and pays, wherever they are (here, helping elsewhere, or driving).
+func employees() -> Array:
+	return game.employees(index)
+
+
+func employee(id: int):
+	for w in employees():
+		if w.id == id:
+			return w
+	return null
+
+
 func staff_count(role: String) -> int:
-	return workers.filter(func(w): return w.role == role).size()
+	return employees().filter(func(w): return w.role == role).size()
 
 
 func staff_max(role: String) -> int:
@@ -201,7 +216,7 @@ func staff_max(role: String) -> int:
 
 func daily_wages() -> float:
 	var total := 0.0
-	for w in staff():
+	for w in employees():
 		total += w.wage
 	return total
 
@@ -477,10 +492,60 @@ func coverage(role: String) -> Dictionary:
 	var out := {}
 	for s in bal["shifts"]:
 		out[s] = 0
-	for w in workers:
+	for w in employees():
 		if w.role == role:
 			out[w.shift] += 1
 	return out
+
+
+## Minutes until a staff member's shift ends (0 if off duty).
+func shift_minutes_left(w) -> float:
+	if not on_duty(w):
+		return 0.0
+	var end_min: float = float(shift_hours(w.shift)[1]) * 60.0
+	return fposmod(end_min - minute_of_day(), MIN_PER_DAY)
+
+
+## How long one job takes this worker (used to decide if a drive is worth it).
+func job_minutes(w) -> float:
+	match w.role:
+		"maintenance":
+			return repair_minutes(w)
+		"housekeeper":
+			return float(bal["task_minutes"]["clean"])
+	return 0.0
+
+
+## Jobs for a role that nobody has picked up yet.
+func open_work(role: String) -> int:
+	match role:
+		"maintenance":
+			return rooms.filter(func(r): return r.broken != "" and r.fixer_id == -1).size()
+		"housekeeper":
+			return rooms.filter(func(r): return r.state == "dirty" and r.cleaner_id == -1).size()
+	return 0
+
+
+## Is someone of this role on shift here (or arriving for their shift)?
+func has_cover(role: String) -> bool:
+	for w in workers:
+		if w.role == role and on_duty(w):
+			return true
+	return false
+
+
+## " to fix 2 broken rooms", for the travel log.
+func work_text(role: String) -> String:
+	var n := open_work(role)
+	if n <= 0:
+		return ""
+	var rooms_txt := "%d room%s" % [n, "" if n == 1 else "s"]
+	match role:
+		"maintenance":
+			return " to fix %s" % rooms_txt
+		"housekeeper":
+			return " to clean %s" % rooms_txt
+	return ""
 
 
 func _event(type: String, text: String, extra := {}) -> void:
@@ -570,11 +635,10 @@ func hire(candidate_index: int) -> bool:
 
 
 func fire(worker_id: int, quit := false) -> void:
-	var w = get_worker(worker_id)
-	if w == null or w.role == "owner":
+	var w = employee(worker_id)
+	if w == null:
 		return
-	_release_worker(w)
-	workers.erase(w)
+	game.dismiss(w)
 	if quit:
 		_event("staff", "%s quit. They felt underpaid." % w.name)
 	else:
@@ -582,15 +646,27 @@ func fire(worker_id: int, quit := false) -> void:
 
 
 func set_wage(worker_id: int, wage: float) -> void:
-	var w = get_worker(worker_id)
-	if w != null and w.role != "owner":
+	var w = employee(worker_id)
+	if w != null:
 		w.wage = clampf(roundf(wage), 0.0, 1000.0)
 
 
 func set_shift(worker_id: int, shift: String) -> void:
-	var w = get_worker(worker_id)
-	if w != null and w.role != "owner" and bal["shifts"].has(shift):
+	var w = employee(worker_id)
+	if w != null and bal["shifts"].has(shift):
 		w.shift = shift
+
+
+## Let a staff member drive to the other properties when there's work for them there and nobody to do it.
+func set_shared(worker_id: int, on: bool) -> void:
+	var w = employee(worker_id)
+	if w == null or not game.can_share(w.role):
+		return
+	w.shared = on
+	if on:
+		_event("staff", "%s will now help out at your other properties (mileage $%.2f a trip)." % [w.name, game.trip_cost()])
+	else:
+		_event("staff", "%s will stick to %s." % [w.name, display_name()])
 
 
 func resolve_discount(guest_id: int, accept: bool) -> void:
@@ -1044,6 +1120,13 @@ func _update_worker(w, dt: float) -> void:
 			_go(w, layout.staff_spawn)
 			if _at(w, layout.staff_spawn):
 				game.start_travel(w, w.job["to"])
+		"commute":
+			if not on_duty(w):
+				w.job = {}
+				return
+			_go(w, layout.staff_spawn)
+			if _at(w, layout.staff_spawn):
+				game.start_commute(w, w.job["to"])
 		"":
 			if w.role == "owner":
 				return
@@ -1055,6 +1138,11 @@ func _update_worker(w, dt: float) -> void:
 				_go(w, layout.staff_spawn)
 				if _at(w, layout.staff_spawn):
 					w.present = false
+					if w.home != index and w.home >= 0:
+						# Helping out here today: they drive home, and start their next shift at home.
+						remove_worker(w)
+						game.properties[w.home].add_worker(w)
+						w.present = false
 
 
 func _choose_job(w) -> void:
@@ -1093,6 +1181,11 @@ func _choose_job(w) -> void:
 			if best != -1:
 				rooms[best].fixer_id = w.id
 				w.job = {"type": "fix", "room": best}
+	if w.job.is_empty() and w.role != "owner" and w.shared:
+		# Nothing to do here: drive to a property that needs a hand (home first).
+		var to: int = game.help_target(w, index)
+		if to != -1:
+			w.job = {"type": "commute", "to": to}
 
 
 ## Closest room matching `want`, preferring rooms a guest is waiting for.
@@ -1273,6 +1366,7 @@ func close_day(ended_day: int) -> Dictionary:
 		avg += s
 	avg = avg / stars.size() if not stars.is_empty() else 0.0
 	var parts: float = ledger["upkeep"]  # repair parts bought during the day
+	var mileage: float = ledger["mileage"]  # paid to shared staff who drove here
 	var report := {
 		"name": display_name(),
 		"key": key,
@@ -1281,7 +1375,8 @@ func close_day(ended_day: int) -> Dictionary:
 		"refunds": ledger["refunds"],
 		"wages": wages,
 		"upkeep": upkeep + parts,
-		"net": ledger["revenue"] - ledger["refunds"] - wages - upkeep - parts,
+		"mileage": mileage,
+		"net": ledger["revenue"] - ledger["refunds"] - wages - upkeep - parts - mileage,
 		"checkins": ledger["checkins"],
 		"checkouts": ledger["checkouts"],
 		"walkouts": ledger["walkouts"],
@@ -1294,7 +1389,7 @@ func close_day(ended_day: int) -> Dictionary:
 		"rating": rating(),
 		"quits": [],
 	}
-	for w in staff():
+	for w in employees():
 		w.days_employed += 1
 		var market: float = bal["staff"][w.role]["market_wage"]
 		if w.wage < market:
@@ -1351,11 +1446,15 @@ func from_save(owner_game, property_index: int, data: Dictionary) -> void:
 	ledger = data["ledger"]
 	for k in ["repairs", "breakages"]:
 		ledger[k] = ledger.get(k, 0)
+	ledger["mileage"] = ledger.get("mileage", 0.0)
 	stats = data["stats"]
 	for k in ["repairs", "breakages"]:
 		stats[k] = stats.get(k, 0)
 	rooms = data["rooms"].map(func(d): return dict_to_inst(d))
 	workers = data["workers"].map(func(d): return dict_to_inst(d)).filter(func(w): return w.role != "owner")
+	for w in workers:
+		if w.home < 0:
+			w.home = index  # saves from before staff sharing
 	guests = {}
 	for d in data["guests"]:
 		var g = dict_to_inst(d)

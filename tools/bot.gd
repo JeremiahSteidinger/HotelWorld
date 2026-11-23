@@ -66,7 +66,7 @@ static func _staff_hotel(p) -> void:
 	var want := [["clerk", "day"], ["clerk", "evening"], ["housekeeper", "day"], ["maintenance", "day"],
 		["housekeeper", "day"], ["clerk", "night"], ["housekeeper", "evening"]]
 	var have := {}
-	for w in p.staff():
+	for w in p.employees():
 		var k: String = w.role + "/" + w.shift
 		have[k] = have.get(k, 0) + 1
 	for item in want:

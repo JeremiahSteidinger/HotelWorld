@@ -5,6 +5,9 @@
   "start_hour": 8,
   "start_property": "motel",
   "travel_minutes": 40,
+  "_sharing_comment": "Shared staff (roles with can_share) drive between properties during their shift. Each trip takes travel_minutes and is reimbursed at mileage_rate per mile.",
+  "travel_miles": 24,
+  "mileage_rate": 0.7,
   "walk_cells_per_minute": 2.0,
   "task_minutes": {
     "check_in": 6,
@@ -295,7 +298,8 @@
       "name": "Maintenance Tech",
       "market_wage": 60,
       "default_shift": "day",
-      "applicants": 1
+      "applicants": 1,
+      "can_share": true
     }
   },
   "bank": {

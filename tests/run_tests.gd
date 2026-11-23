@@ -640,3 +640,135 @@ func test_late_checkout_request_times_out() -> void:
 	var g = _late_guest(s)
 	check(run_until(s, func(): return g.late_state == "done", 60.0), "unanswered request is treated as a no")
 	check(g.notes.has("no_late"), "and the guest is a little annoyed")
+
+
+# --------------------------------------------------------------------------- shared staff
+
+## A maintenance tech hired by property `p`, set to share or not.
+func _tech(p, shared: bool, tech_name := "Fix-It Felix"):
+	p.candidates = [{"role": "maintenance", "name": tech_name, "wage": 60.0}]
+	check(p.hire(0), "hired %s" % tech_name)
+	var w = p.employees().filter(func(e): return e.name == tech_name)[0]
+	p.set_shared(w.id, shared)
+	return w
+
+
+func test_shared_tech_drives_over_and_back() -> void:
+	var h = hotel_game()
+	var g = h.game
+	var motel = g.properties[0]
+	var tech = _tech(motel, true)
+	check(tech.home == 0, "tech works for the motel")
+	var broken: int = h.broken_rooms().size()
+	g.time = 7 * 60.0
+	var cash0: float = g.cash
+	check(run_until(h, func(): return g.commute_of(tech).size() > 0, 60.0), "shared tech sets off for the hotel")
+	check(is_equal_approx(cash0 - g.cash, g.trip_cost()), "mileage paid for the trip")
+	check(is_equal_approx(h.ledger["mileage"], g.trip_cost()), "mileage charged to the hotel")
+	check(motel.employees().has(tech) and motel.staff_count("maintenance") == 1, "still on the motel's payroll while driving")
+	var t0: float = g.time
+	check(run_until(h, func(): return g.where_is(tech) == 1, 120.0), "tech arrives at the hotel")
+	check(g.time - t0 >= g.bal["travel_minutes"] - 1.0, "the drive takes time")
+	check(not h.employees().has(tech) and h.staff().has(tech), "helping at the hotel, not employed by it")
+	var mins: float = g.bal["task_minutes"]["repair"] * broken + 60.0
+	check(run_until(h, func(): return h.broken_rooms().is_empty(), mins), "tech fixed the hotel's rooms")
+	# Something breaks back home: the tech drives home to fix it.
+	motel.rooms[0].broken = "TV"
+	check(run_until(h, func(): return g.where_is(tech) == 0, 120.0), "tech drives home when the motel needs them")
+	check(is_equal_approx(motel.ledger["mileage"], g.trip_cost()), "trip home charged to the motel")
+	check(run_until(h, func(): return motel.rooms[0].broken == "", 60.0), "fixed the motel room")
+	g.time = 1439.0
+	g.tick(2.0)
+	var r: Dictionary = g.reports[-1]
+	check(r["props"][1]["mileage"] > 0.0 and r["props"][0]["wages"] >= 60.0, "report shows mileage, wages stay with the motel")
+
+
+func test_unshared_tech_stays_home() -> void:
+	var h = hotel_game()
+	var g = h.game
+	var tech = _tech(g.properties[0], false)
+	g.time = 7 * 60.0
+	g.tick(120.0)
+	check(g.where_is(tech) == 0 and g.commutes.is_empty(), "tech that isn't shared stays at the motel")
+
+
+func test_shared_tech_wont_leave_late_in_shift() -> void:
+	var h = hotel_game()
+	var g = h.game
+	var tech = _tech(g.properties[0], true)
+	g.time = 14 * 60.0 + 30.0  # day shift ends at 3 PM: no time for the drive and a repair
+	g.tick(60.0)
+	check(g.commutes.is_empty() and g.where_is(tech) == 0, "no drive at the end of the shift")
+
+
+func test_shared_tech_goes_home_after_shift() -> void:
+	var h = hotel_game()
+	var g = h.game
+	var motel = g.properties[0]
+	var tech = _tech(motel, true)
+	g.time = 7 * 60.0
+	check(run_until(h, func(): return g.where_is(tech) == 1, 200.0), "tech at the hotel")
+	g.time = g.day() * 1440.0 - 1440.0 + 14 * 60.0 + 59.0
+	check(run_until(h, func(): return g.where_is(tech) == 0 and not tech.present, 120.0), "goes home after the shift")
+	check(motel.ledger["mileage"] == 0.0, "drive home after the shift isn't reimbursed")
+	for r in h.rooms:
+		r.broken = ""  # nothing left to fix at the hotel
+		r.fixer_id = -1
+	g.time = g.day() * 1440.0 + 7 * 60.0 - 1.0
+	g.tick(5.0)
+	check(g.where_is(tech) == 0 and tech.present, "next shift starts at the motel")
+
+
+func test_only_one_shared_tech_answers_a_call() -> void:
+	var h = hotel_game()
+	var g = h.game
+	var motel = g.properties[0]
+	var a = _tech(h, true, "Tech A")
+	var b = _tech(h, true, "Tech B")
+	for r in h.rooms:
+		r.broken = ""
+	motel.rooms[2].broken = "AC"
+	g.time = 7 * 60.0
+	g.tick(20.0)
+	check(g.commutes.size() == 1, "one tech drives to the motel, not both")
+	check(run_until(h, func(): return motel.rooms[2].broken == "", 200.0), "motel room fixed by the hotel's tech")
+	check(h.staff_count("maintenance") == 2 and motel.staff_count("maintenance") == 0, "payroll unchanged")
+	h.fire(a.id if g.where_is(a) == 0 else b.id)
+	check(h.staff_count("maintenance") == 1 and g.where_is(a) + g.where_is(b) >= 0, "can let go a tech who is away")
+
+
+func test_save_load_mid_commute() -> void:
+	var h = hotel_game()
+	var g = h.game
+	var tech = _tech(g.properties[0], true)
+	g.time = 7 * 60.0
+	check(run_until(h, func(): return g.commutes.size() == 1, 60.0), "tech on the road")
+	var path := "user://test_save_commute.txt"
+	check(g.save_to(path), "saved")
+	var t = Game.new()
+	check(t.load_from(g.bal, path), "loaded")
+	check(t.commutes.size() == 1 and t.commutes[0]["worker"].shared, "commute restored")
+	g.tick(120.0)
+	t.tick(120.0)
+	var tw = t.properties[0].employee(tech.id)
+	check(tw != null and t.where_is(tw) == g.where_is(tech), "loaded game continues the same")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_shared_housekeeper_if_enabled() -> void:
+	# Only maintenance is shareable in balance.json, but the role list is data: turning it on for housekeepers works too.
+	var h = hotel_game()
+	var g = h.game
+	var motel = g.properties[0]
+	motel.candidates = [{"role": "housekeeper", "name": "Mel", "wage": 45.0}]
+	motel.hire(0)
+	var hk = motel.employees()[0]
+	motel.set_shared(hk.id, true)
+	check(not hk.shared, "housekeepers can't be shared by default")
+	g.bal["staff"]["housekeeper"]["can_share"] = true
+	motel.set_shared(hk.id, true)
+	check(hk.shared, "shareable once balance allows it")
+	h.rooms[0].broken = ""
+	h.rooms[0].state = "dirty"
+	g.time = 7 * 60.0
+	check(run_until(h, func(): return h.rooms[0].state == "clean", 300.0), "motel housekeeper cleaned a hotel room")

@@ -21,6 +21,7 @@ var properties: Array = []   # owned properties, in the order they were bought
 var loans: Array = []        # [{id, kind: "loan"/"mortgage", name, balance, rate, payment, days_left}]
 var owner_w                  # the owner (a Worker). Lives in one property's workers, or is on the road.
 var travel := {}             # while driving: {"from": index, "to": index, "eta": time}
+var commutes: Array = []     # shared staff on the road: [{"worker": Worker, "from": index, "to": index, "eta": time}]
 var reports: Array = []      # one per day, see _end_of_day()
 var next_id := 1
 var neg_days := 0
@@ -52,6 +53,7 @@ func new_game(balance: Dictionary, game_mode := "campaign", seed_value := -1) ->
 	properties = []
 	loans = []
 	travel = {}
+	commutes = []
 	reports = []
 	next_id = 1
 	neg_days = 0
@@ -164,6 +166,112 @@ func _update_travel() -> void:
 	travel = {}
 	p.add_worker(owner_w)
 	add_event("travel", "You arrived at %s." % p.display_name(), {"prop": p.index})
+
+
+# --------------------------------------------------------------------------- shared staff
+
+## Can this role be shared between properties?
+func can_share(role: String) -> bool:
+	return bool(bal["staff"].get(role, {}).get("can_share", false))
+
+
+## Mileage paid for one trip between properties.
+func trip_cost() -> float:
+	return roundf(float(bal["travel_miles"]) * float(bal["mileage_rate"]) * 100.0) / 100.0
+
+
+## Everyone employed by property `index`, wherever they are right now (here, at another property, or driving).
+func employees(index: int) -> Array:
+	var out := []
+	for p in properties:
+		for w in p.workers:
+			if w.role != "owner" and w.home == index:
+				out.append(w)
+	for c in commutes:
+		if c["worker"].home == index:
+			out.append(c["worker"])
+	return out
+
+
+## Index of the property a staff member is at, or -1 while driving (or not found).
+func where_is(w) -> int:
+	for p in properties:
+		if p.workers.has(w):
+			return p.index
+	return -1
+
+
+func commute_of(w) -> Dictionary:
+	for c in commutes:
+		if c["worker"] == w:
+			return c
+	return {}
+
+
+## Staff of `role` on the road to property `to_index`.
+func commuters_to(to_index: int, role: String) -> int:
+	return commutes.filter(func(c): return c["to"] == to_index and c["worker"].role == role).size()
+
+
+## Where a shared worker idle at `here` should drive to help, or -1 to stay put.
+## Home comes first; otherwise the property with the most unclaimed work for the role that has
+## nobody of that role on duty or on the way. Only leaves if the shift has time for the drive plus one job.
+func help_target(w, here: int) -> int:
+	if not w.shared or not can_share(w.role) or properties.size() < 2:
+		return -1
+	var p_here = properties[here]
+	if p_here.shift_minutes_left(w) < float(bal["travel_minutes"]) + p_here.job_minutes(w):
+		return -1
+	var best := -1
+	var best_need := 0
+	for p in properties:
+		if p.index == here:
+			continue
+		var need: int = p.open_work(w.role)
+		if need <= 0 or p.has_cover(w.role) or commuters_to(p.index, w.role) > 0:
+			continue
+		if p.index == w.home:
+			need += 1000
+		if need > best_need:
+			best_need = need
+			best = p.index
+	return best
+
+
+## Called by a property when a shared worker reaches their car. Mileage is charged to the property they drive to.
+func start_commute(w, to_index: int) -> void:
+	var from_p = properties[where_is(w)]
+	var to_p = properties[to_index]
+	from_p.remove_worker(w)
+	w.job = {}
+	commutes.append({"worker": w, "from": from_p.index, "to": to_index, "eta": time + float(bal["travel_minutes"])})
+	var cost := trip_cost()
+	cash -= cost
+	to_p.ledger["mileage"] += cost
+	var why: String = to_p.work_text(w.role)
+	add_event("travel", "%s drives from %s to %s%s ($%.2f mileage)." % [w.name, from_p.display_name(), to_p.display_name(), why, cost],
+		{"prop": to_index})
+
+
+func _update_commutes() -> void:
+	for c in commutes.duplicate():
+		if time < c["eta"]:
+			continue
+		commutes.erase(c)
+		var p = properties[c["to"]]
+		p.add_worker(c["worker"])
+		add_event("travel", "%s arrived at %s." % [c["worker"].name, p.display_name()], {"prop": p.index})
+
+
+## Take a staff member off the payroll wherever they are.
+func dismiss(w) -> void:
+	var c := commute_of(w)
+	if not c.is_empty():
+		commutes.erase(c)
+		return
+	var at := where_is(w)
+	if at >= 0:
+		properties[at].remove_worker(w)
 
 
 # --------------------------------------------------------------------------- bank
@@ -363,6 +471,7 @@ func tick(minutes: float) -> void:
 		var dt := minf(minf(minutes, 0.5), to_midnight)
 		time += dt
 		_update_travel()
+		_update_commutes()
 		for p in properties:
 			p.step(dt)
 		minutes -= dt
@@ -432,6 +541,7 @@ func to_save() -> Dictionary:
 		"loans": loans, "travel": travel, "reports": reports, "next_id": next_id, "neg_days": neg_days,
 		"game_over": game_over, "rng_state": rng.state, "bank_today": _bank_today,
 		"owner": inst_to_dict(owner_w), "owner_at": owner_prop(),
+		"commutes": commutes.map(func(c): return {"worker": inst_to_dict(c["worker"]), "from": c["from"], "to": c["to"], "eta": c["eta"]}),
 		"props": properties.map(func(p): return p.to_save()),
 	}
 
@@ -450,6 +560,9 @@ func from_save(balance: Dictionary, data: Dictionary) -> void:
 		var p = Property.new()
 		p.from_save(self, i, data["props"][i])
 		properties.append(p)
+	commutes = []
+	for c in data.get("commutes", []):
+		commutes.append({"worker": dict_to_inst(c["worker"]), "from": c["from"], "to": c["to"], "eta": c["eta"]})
 	owner_w = dict_to_inst(data["owner"])
 	var at: int = data["owner_at"]
 	if at >= 0:
