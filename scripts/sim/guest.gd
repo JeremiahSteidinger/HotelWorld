@@ -30,6 +30,7 @@ var notes := {}           # cause -> mood impact (for review text)
 var pos := Vector2.ZERO   # grid position (float)
 var path: Array = []      # remaining Vector2i cells
 var target := Vector2i(-1, -1)
+var asleep := false       # in bed for the night (only while "staying")
 
 
 func note(cause: String, amount: float) -> void:

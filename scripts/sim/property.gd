@@ -679,16 +679,23 @@ func _update_guest(g, dt: float) -> void:
 			var r = rooms[g.room]
 			if r.state == "clean":
 				g.state = "to_room"
-				_go(g, layout.room_bed(g.room))
+				_go(g, layout.room_stay_spot(g.room))
 			elif g.wait > g.patience * 1.5:
 				_refund_and_leave(g)
 		"to_room":
-			if _at(g, layout.room_bed(g.room)):
+			if _at(g, layout.room_stay_spot(g.room)):
 				g.state = "staying"
 				rooms[g.room].state = "occupied"
 		"staying":
 			if day() > g.checkout_day or (day() == g.checkout_day and minute_of_day() >= g.checkout_minute):
+				g.asleep = false
 				_start_checkout(g)
+			elif is_sleep_time(g):
+				_go(g, layout.room_bed(g.room))
+				g.asleep = _at(g, layout.room_bed(g.room))
+			else:
+				g.asleep = false
+				_go(g, layout.room_stay_spot(g.room))
 		"early_request":
 			g.discount_timer += dt
 			if g.discount_timer > bal["early_checkin"]["timeout"]:
@@ -701,6 +708,21 @@ func _update_guest(g, dt: float) -> void:
 		"leaving":
 			if _at(g, layout.exit_cell):
 				g.state = "gone"
+
+
+## Each guest keeps their own hours: bed somewhere between 9:30 and 11:30 PM, up between 5:30 and 7 AM
+## (always before check-out). Derived from the guest's id so it needs no extra random draws or save data.
+func bedtime(g) -> float:
+	return 21.5 * 60.0 + float((g.id * 37) % 120)
+
+
+func wake_minute(g) -> float:
+	return 5.5 * 60.0 + float((g.id * 53) % 90)
+
+
+func is_sleep_time(g) -> bool:
+	var m := minute_of_day()
+	return m >= bedtime(g) or m < wake_minute(g)
 
 
 func _start_checkout(g) -> void:
@@ -851,7 +873,7 @@ func _finish_checkin(g) -> void:
 	var r = rooms[g.room]
 	if r.state == "clean":
 		g.state = "to_room"
-		_go(g, layout.room_bed(g.room))
+		_go(g, layout.room_stay_spot(g.room))
 		_event("checkin", "%s checked in to room %s for $%d." % [g.name, room_label(g.room), int(price)], {"guest": g.id})
 	else:
 		g.state = "waiting_room"

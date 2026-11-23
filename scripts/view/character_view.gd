@@ -39,6 +39,7 @@ func _place(grid_pos: Vector2, delta: float) -> void:
 
 func sync_guest(g, sim) -> void:
 	_place(g.pos, get_process_delta_time())
+	sprite.visible = not g.asleep
 	_mood = g.mood
 	_bar = -1.0
 	_bubble = ""
@@ -65,6 +66,12 @@ func sync_guest(g, sim) -> void:
 		"discount":
 			_bubble = "%d%% OFF?" % g.discount_pct
 			_bubble_color = Color(1.0, 0.85, 0.3)
+		"staying":
+			if g.asleep:
+				# The body is drawn by the bed sprite; just float some z's above the pillow.
+				_mood = -1.0
+				_bubble = ["z", "z z", "z z z"][int(sim.time / 20.0) % 3]
+				_bubble_color = Color(0.75, 0.8, 1.0)
 		"leaving":
 			_mood = g.mood
 	queue_redraw()

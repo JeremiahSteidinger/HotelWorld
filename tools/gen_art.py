@@ -172,7 +172,18 @@ def _front_walls(dr, ox, oy, w, d, door_front_left, door_front_right):
             dr.polygon([p, q, (q[0], q[1] - low), (p[0], p[1] - low)], fill=shade(EXT, 0.65), outline=shade(EXT, 0.45))
 
 
+def side_wall(name, w, d):
+    """Just the low front-right wall of a w x d shell, on the same canvas as the shell.
+    Drawn over the last room so its bed can't poke through the motel's end wall."""
+    img, dr, ox, oy = canvas(w, d, WALL_H)
+    low = 9
+    p, q = iso(w, 0, ox, oy), iso(w, d, ox, oy)
+    dr.polygon([p, q, (q[0], q[1] - low), (p[0], p[1] - low)], fill=shade(EXT, 0.65), outline=shade(EXT, 0.45))
+    save(img, name)
+
+
 shell("room_shell", 2, 2, (210, 196, 220, 255), door_front_left=(0, 1), left_h=16)
+side_wall("room_side", 2, 2)
 shell("lobby_shell", 4, 5, (226, 206, 160, 255), door_front_left=(2, 3), door_front_right=(2, 3))
 
 # ----------------------------------------------------------------------------- furniture / props
@@ -190,22 +201,31 @@ def desk():
     save(img, "desk")
 
 
-def bed(name, blanket, messy):
+def bed(name, blanket, messy, sleeper=None):
     img, dr, ox, oy = canvas(1, 1, 18)
     box(dr, ox, oy, 0.05, 0.05, 0.9, 0.9, 8, (120, 80, 50, 255))           # frame
     box(dr, ox, oy, 0.08, 0.08, 0.84, 0.84, 4, (245, 245, 240, 255), lift=8)  # mattress
     if messy:
-        diamond(dr, ox, oy, 0.25, 0.1, 0.6, 0.8, shade(blanket, 0.9), lift=12)
-        diamond(dr, ox, oy, 0.5, 0.15, 0.35, 0.5, shade(blanket, 0.7), lift=13)
-        p = iso(0.2, 0.6, ox, oy - 12)
+        diamond(dr, ox, oy, 0.1, 0.25, 0.8, 0.6, shade(blanket, 0.9), lift=12)
+        diamond(dr, ox, oy, 0.15, 0.5, 0.5, 0.35, shade(blanket, 0.7), lift=13)
+        p = iso(0.6, 0.2, ox, oy - 12)
         dr.ellipse([p[0] - 6, p[1] - 3, p[0] + 4, p[1] + 2], fill=(240, 240, 235, 255))
         # clothes on the floor
         for (gx, gy, col) in [(0.9, 0.95, (70, 110, 200, 255)), (0.1, 1.0, (220, 90, 70, 255))]:
             p = iso(gx, gy, ox, oy)
             dr.rectangle([p[0] - 4, p[1] - 2, p[0] + 3, p[1] + 1], fill=col)
     else:
-        diamond(dr, ox, oy, 0.35, 0.08, 0.57, 0.84, blanket, lift=12)
-        diamond(dr, ox, oy, 0.08, 0.15, 0.25, 0.7, (250, 250, 250, 255), lift=13)
+        # head of the bed against the back (window) wall, foot toward the door side
+        diamond(dr, ox, oy, 0.08, 0.35, 0.84, 0.57, blanket, lift=12)
+        diamond(dr, ox, oy, 0.15, 0.08, 0.7, 0.25, (250, 250, 250, 255), lift=13)
+    if sleeper:
+        skin, hair = sleeper
+        # a body-shaped lump under the blanket, and a head on the pillow
+        diamond(dr, ox, oy, 0.3, 0.4, 0.4, 0.5, shade(blanket, 1.15), lift=15)
+        diamond(dr, ox, oy, 0.35, 0.45, 0.3, 0.35, shade(blanket, 1.3), lift=17)
+        p = iso(0.5, 0.22, ox, oy - 15)
+        dr.ellipse([p[0] - 5, p[1] - 4, p[0] + 5, p[1] + 3], fill=skin + (255,))
+        dr.ellipse([p[0] - 6, p[1] - 5, p[0] + 1, p[1] + 2], fill=hair + (255,))
     save(img, name)
 
 
@@ -282,6 +302,7 @@ def ice_machine():
 desk()
 bed("bed_clean", (70, 120, 190, 255), False)
 bed("bed_messy", (70, 120, 190, 255), True)
+bed("bed_sleeping", (70, 120, 190, 255), False, ((220, 170, 130), (70, 50, 36)))
 car("car_red", (200, 60, 60, 255))
 car("car_blue", (60, 100, 200, 255))
 car("car_green", (70, 160, 90, 255))
@@ -419,7 +440,62 @@ def icon():
     save(img, "icon")
 
 
+def window_lit(closed=False):
+    """Same canvas as room_shell: the back window with the lights on and curtains half drawn,
+    or (closed) lights off with the curtains shut for the night."""
+    img, dr, ox, oy = canvas(2, 2, WALL_H)
+    x0, y0 = iso(1, 0, ox, oy)
+    frame = (90, 70, 50, 255)
+    dr.polygon([(x0 - 12, y0 - 18), (x0 + 12, y0 - 6), (x0 + 12, y0 - 30), (x0 - 12, y0 - 42)],
+               fill=(255, 214, 120, 255), outline=frame)
+    curtain = (196, 92, 84, 255)
+    for (a, b) in [(-11, -5), (5, 11)]:
+        # vertical strips that follow the wall's slope (y rises 1px per 2px of x)
+        dr.polygon([(x0 + a, y0 - 41 + (a + 12) // 2), (x0 + b, y0 - 41 + (b + 12) // 2),
+                    (x0 + b, y0 - 19 + (b + 12) // 2), (x0 + a, y0 - 19 + (a + 12) // 2)], fill=curtain)
+    if closed:
+        dr.polygon([(x0 - 11, y0 - 18), (x0 + 11, y0 - 7), (x0 + 11, y0 - 30), (x0 - 11, y0 - 41)],
+                   fill=(110, 52, 60, 255))
+        for a in (-6, 0, 6):
+            dr.line([(x0 + a, y0 - 38 + (a + 12) // 2), (x0 + a, y0 - 19 + (a + 12) // 2)], fill=(88, 40, 48, 255))
+    dr.line([(x0, y0 - 12), (x0, y0 - 36)], fill=frame)
+    save(img, "window_closed" if closed else "window_lit")
+
+
+def luggage(kind):
+    """Small upright props left in an occupied room."""
+    img = Image.new("RGBA", (26, 24), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(img)
+    dr.ellipse([2, 19, 23, 23], fill=(0, 0, 0, 60))
+
+    def case(x, y, w, h, col):
+        dr.rectangle([x, y, x + w, y + h], fill=col, outline=shade(col, 0.55))
+        dr.rectangle([x + w // 2 - 2, y - 3, x + w // 2 + 2, y - 1], outline=(50, 50, 56, 255))
+        dr.line([(x + 2, y + h // 2), (x + w - 2, y + h // 2)], fill=shade(col, 0.75))
+
+    if kind == "budget":       # a stuffed backpack slumped on the floor
+        dr.rounded_rectangle([7, 7, 19, 21], 4, fill=(200, 140, 40, 255), outline=(130, 88, 24, 255))
+        dr.rounded_rectangle([9, 13, 17, 19], 2, fill=(170, 116, 32, 255))
+        dr.line([(9, 7), (11, 3), (15, 3), (17, 7)], fill=(130, 88, 24, 255), width=2)
+    elif kind == "business":   # rolling carry-on with the handle up
+        dr.line([(10, 1), (10, 9)], fill=(70, 70, 78, 255), width=1)
+        dr.line([(16, 1), (16, 9)], fill=(70, 70, 78, 255), width=1)
+        dr.line([(10, 1), (16, 1)], fill=(70, 70, 78, 255), width=2)
+        dr.rectangle([7, 9, 19, 20], fill=(52, 58, 80, 255), outline=(30, 32, 44, 255))
+        dr.line([(9, 12), (17, 12)], fill=(80, 88, 116, 255))
+        dr.point([(9, 21), (17, 21)], fill=(20, 20, 24, 255))
+    else:                      # family: a big suitcase and a small one
+        case(1, 8, 13, 12, (60, 130, 110, 255))
+        case(14, 12, 9, 8, (230, 120, 60, 255))
+    outline(img)
+    save(img, "luggage_" + kind)
+
+
 icon()
+window_lit()
+window_lit(closed=True)
+for k in ("budget", "business", "family"):
+    luggage(k)
 
 # ----------------------------------------------------------------------------- phase 2: Maple Grove Hotel
 # (Drawn after everything else so the random details of the older art stay the same.)
@@ -508,4 +584,5 @@ hotel_sign(True)
 armchair()
 char("maintenance", (230, 120, 40), (60, 70, 110), toolbelt)
 char("guest_couple", (180, 70, 140), (50, 50, 70), kid=(70, 140, 200), kid_scale=0.95)
+luggage("couple")
 print("art written to", os.path.abspath(OUT))

@@ -133,6 +133,25 @@ func room_count() -> int:
 	return rooms.size()
 
 
+## Bed cells for a room: the main bed (back-right), plus the back-left cell for a second bed.
+func room_beds(i: int, count: int) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = [room_bed(i)]
+	if count >= 2:
+		cells.push_front(room_origin(i) + (Vector2i(0, 1) if is_front_room(i) else Vector2i.ZERO))
+	return cells
+
+
+## Where a guest settles while staying: next to the bed, the same cell staff work from.
+func room_stay_spot(i: int) -> Vector2i:
+	return rooms[i]["work"]
+
+
+## Where a staying guest's luggage sits: just inside the room, by the side wall.
+func room_luggage_pos(i: int) -> Vector2:
+	var o: Vector2i = rooms[i]["origin"]
+	return Vector2(o.x + 0.25, o.y + 1.35)
+
+
 func queue_slot(index: int) -> Vector2i:
 	return line[mini(index, line.size() - 1)]
 

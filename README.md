@@ -15,6 +15,7 @@ to fix what guests break, and a bank that will lend you money.
 
 ![The motel](docs/screenshots/day2_checkout.png)
 ![The hotel](docs/screenshots/hotel_evening.png)
+![The hotel at night](docs/screenshots/hotel_night.png)
 
 See [docs/GAME_PLAN.md](docs/GAME_PLAN.md) for the design and the roadmap (training,
 promotions, amenities, a map with more properties).

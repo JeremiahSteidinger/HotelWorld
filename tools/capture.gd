@@ -12,7 +12,9 @@ var shots := [
 	# [frame, label, minutes to fast-forward before the shot, action]
 	[20, "start_menu", 0.0, ""],
 	[40, "day1_morning", 0.0, "new_game"],
-	[80, "day2_checkout", 1500.0, ""],
+	[60, "day1_afternoon", 420.0, ""],
+	[80, "night", 520.0, ""],
+	[100, "day2_checkout", 560.0, ""],
 	[120, "staff_panel", 0.0, "staff"],
 	[160, "bank", 0.0, "bank"],
 	[200, "day_report", 0.0, "report"],
@@ -24,6 +26,7 @@ var shots := [
 	[440, "hotel_staff", 0.0, "staff"],
 	[480, "two_property_report", 900.0, "report2"],
 	[520, "motel_from_hotel", 0.0, "motel"],
+	[560, "hotel_night", 780.0, "hotel_view"],
 ]
 
 
@@ -102,6 +105,9 @@ func _act(action: String, minutes: float) -> void:
 		"motel":
 			ui.close_modal()
 			main.show_property(0)
+		"hotel_view":
+			ui.close_modal()
+			main.show_property(1)
 		"discount":
 			ui.close_modal()
 			var p = main.sim

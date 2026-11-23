@@ -148,6 +148,20 @@ func test_checkout_makes_room_dirty_and_reviews() -> void:
 	check(run_until(s, func(): return not s.reviews.is_empty()), "guest leaves a review at checkout")
 
 
+func test_guest_goes_to_bed_and_gets_up() -> void:
+	var s = fresh()
+	var g = add_guest(s, "business")
+	check(run_until(s, func(): return g.state == "staying"), "checked in")
+	check(not g.asleep, "guest is awake after checking in")
+	check(run_until(s, func(): return g.asleep, 1440.0), "guest goes to bed at night")
+	check(g.cell() == s.layout.room_bed(g.room), "sleeping guest is in the bed")
+	var m: float = s.minute_of_day()
+	check(m >= 21.5 * 60.0 or m < 7.0 * 60.0, "bedtime is in the evening")
+	check(run_until(s, func(): return not g.asleep, 1440.0), "guest wakes up")
+	check(g.state == "staying" and s.minute_of_day() < g.checkout_minute, "guest wakes up before check-out")
+	check(run_until(s, func(): return g.state != "staying", 600.0), "guest still checks out after sleeping")
+
+
 func test_discount_accept_and_refuse() -> void:
 	var s = fresh()
 	var g = add_guest(s, "budget")
