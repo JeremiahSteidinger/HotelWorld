@@ -32,6 +32,10 @@ The first time you open the project, Godot spends a few seconds importing the ar
 - Guests who arrive early may ask to check in early (if a clean room is free). Say no,
   charge a fee (set it under **Rates**) or let them in free. Free early check-ins earn
   better reviews; fees earn money but annoy some guests, and some will haggle.
+- Staying guests may call the desk the evening before check-out, or that morning before
+  11 AM, to ask for a **late check-out** (up to 1 PM). Same choices: no, a fee (set under
+  **Rates**) or free. Happier guests and extra money, but the room is dirty later and may
+  not be clean by 3 PM check-in (or for an early check-in).
 - When guests check out, their room is **dirty**. Click a dirty room to go clean it.
 - You can queue several jobs: they happen in order (see the panel bottom-left).
 - Guests whose room isn't ready wait in the lobby and get grumpy. Waiting too long

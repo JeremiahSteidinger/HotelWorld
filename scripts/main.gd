@@ -90,7 +90,7 @@ func _process(delta: float) -> void:
 		match e["type"]:
 			"discount":
 				ui.queue_discount(e["guest"])
-			"early":
+			"early", "late":
 				ui.queue_discount(e["guest"])
 			"day_end":
 				ui.queue_report(e["report"])

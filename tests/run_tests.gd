@@ -330,3 +330,69 @@ func test_no_early_offer_without_clean_room() -> void:
 	var g = add_guest(s, "budget")
 	s.tick(60.0)
 	check(g.state == "queue" and g.early_state == "", "no early offer when no clean room is free")
+
+
+## A guest who checked in yesterday, checks out this morning and is about to ask for a late check-out.
+func _late_guest(s, archetype := "budget"):
+	s.time = 16 * 60.0
+	s.bal["late_checkout"]["want_chance"][archetype] = 1.0
+	var g = add_guest(s, archetype)
+	g.nights = 1
+	g.checkout_day = s.day() + 1
+	g.checkout_minute = 9 * 60.0
+	check(run_until(s, func(): return g.state == "staying", 120.0), "late guest checks in")
+	check(g.late_state == "planned", "guest plans to ask for a late check-out")
+	check(g.late_until > 11 * 60.0 and g.late_until <= 13 * 60.0, "asks to stay past 11 AM but not past 1 PM")
+	check(run_until(s, func(): return g.late_state == "asking", 1200.0), "guest calls the desk")
+	var m: float = s.minute_of_day()
+	var evening_before: bool = s.day() == g.checkout_day - 1 and m >= 18 * 60.0
+	var morning_of: bool = s.day() == g.checkout_day and m < 11 * 60.0
+	check(evening_before or morning_of, "asks the evening before or before 11 AM on check-out day")
+	return g
+
+
+func test_late_checkout_free() -> void:
+	var s = fresh()
+	var g = _late_guest(s)
+	var mood: float = g.mood
+	var until: float = g.late_until
+	s.resolve_late(g.id, "free")
+	check(g.mood > mood and g.late_state == "done", "free late check-out makes the guest happier")
+	check(run_until(s, func(): return g.purpose == "checkout", 1440.0), "guest eventually checks out")
+	check(s.day() == g.checkout_day and s.minute_of_day() >= until - 1.0, "and not before the agreed late time")
+
+
+func test_late_checkout_refused() -> void:
+	var s = fresh()
+	var g = _late_guest(s)
+	var mood: float = g.mood
+	s.resolve_late(g.id, "no")
+	check(g.mood < mood and g.notes.has("no_late"), "refusal annoys the guest")
+	check(run_until(s, func(): return g.purpose == "checkout", 1440.0), "guest checks out")
+	check(s.minute_of_day() <= 11 * 60.0, "at the usual time")
+
+
+func test_late_checkout_fee_and_haggle() -> void:
+	var s = fresh()
+	s.bal["late_checkout"]["haggle_chance"]["business"] = 0.0
+	var g = _late_guest(s, "business")
+	var cash: float = s.cash
+	s.resolve_late(g.id, "fee")
+	check(is_equal_approx(s.cash - cash, s.late_fee) and g.late_fee == s.late_fee, "late fee charged")
+	check(is_equal_approx(g.checkout_minute, g.late_until), "paid guest stays late")
+	var t = fresh()
+	t.bal["late_checkout"]["haggle_chance"]["budget"] = 1.0
+	t.bal["late_checkout"]["pay_after_insist_chance"]["budget"] = 0.0
+	var h = _late_guest(t, "budget")
+	var normal: float = h.checkout_minute
+	t.resolve_late(h.id, "fee")
+	check(h.late_state == "haggling", "guest haggles over the late fee")
+	t.resolve_late(h.id, "fee")
+	check(h.late_state == "done" and h.notes.has("late_fee") and is_equal_approx(h.checkout_minute, normal), "insisting can make them leave on time, unhappy")
+
+
+func test_late_checkout_request_times_out() -> void:
+	var s = fresh()
+	var g = _late_guest(s)
+	check(run_until(s, func(): return g.late_state == "done", 60.0), "unanswered request is treated as a no")
+	check(g.notes.has("no_late"), "and the guest is a little annoyed")

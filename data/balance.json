@@ -134,5 +134,34 @@
       "business": 0.9
     },
     "timeout": 30
+  },
+  "late_checkout": {
+    "_comment": "Staying guests may call the desk (the evening before or the morning of check-out, before deadline_hour) to ask to stay until as late as max_hour.",
+    "default_fee": 25,
+    "want_chance": {
+      "budget": 0.15,
+      "family": 0.25,
+      "business": 0.35
+    },
+    "evening_start_hour": 18,
+    "deadline_hour": 11,
+    "max_hour": 13,
+    "free_bonus": 10,
+    "paid_bonus": 5,
+    "fee_mood_per_dollar": 0.25,
+    "refuse_mood": -5,
+    "insist_mood": -8,
+    "declined_fee_mood": -12,
+    "haggle_chance": {
+      "budget": 0.7,
+      "family": 0.5,
+      "business": 0.2
+    },
+    "pay_after_insist_chance": {
+      "budget": 0.4,
+      "family": 0.6,
+      "business": 0.9
+    },
+    "timeout": 30
   }
 }

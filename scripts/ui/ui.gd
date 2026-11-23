@@ -349,6 +349,19 @@ func show_rates() -> void:
 	espin.value_changed.connect(func(val): sim.set_early_fee(val))
 	erow.add_child(espin)
 	_text(erow, "  offered when guests arrive before 3 PM ($0 = always free)", 13, Color(0.75, 0.85, 0.75))
+	var lrow := HBoxContainer.new()
+	v.add_child(lrow)
+	var ll := _text(lrow, "Late check-out fee")
+	ll.custom_minimum_size = Vector2(170, 0)
+	var lspin := SpinBox.new()
+	lspin.min_value = 0
+	lspin.max_value = 200
+	lspin.prefix = "$"
+	lspin.value = sim.late_fee
+	lspin.custom_minimum_size = Vector2(150, 0)
+	lspin.value_changed.connect(func(val): sim.set_late_fee(val))
+	lrow.add_child(lspin)
+	_text(lrow, "  offered when guests ask to stay past 11 AM, up to 1 PM ($0 = always free)", 13, Color(0.75, 0.85, 0.75))
 	_text(v, "Daily upkeep: $%d (utilities, laundry, supplies)." % int(sim.daily_upkeep()), 13, Color(0.8, 0.8, 0.85))
 
 
@@ -423,6 +436,7 @@ func show_help() -> void:
 - Guests line up at the front desk. Someone has to be AT the desk to check them in or out.
 - Check-out is between 7 and 11 AM. Check-in opens at 3 PM. Use the time in between to clean.
 - Early birds may ask to check in early: say no, charge a fee (set it under Rates), or let them in free. Some will haggle.
+- Guests may call the night before or on check-out morning (before 11 AM) to ask for a late check-out, up to 1 PM. Same choices. Happy guests and extra fees, but their room gets cleaned later.
 - When guests check out, their room is dirty. Click a dirty room to go clean it.
 - If a guest checks in before their room is clean, they wait in the lobby and get grumpy.
 - Waiting too long ruins the mood. Unhappy guests ask for discounts and leave bad reviews.
@@ -502,6 +516,9 @@ func _next_popup() -> void:
 		if sim.guests.has(gid) and sim.guests[gid].state == "early_request":
 			_show_early(sim.guests[gid])
 			return
+		if sim.guests.has(gid) and sim.guests[gid].late_state in ["asking", "haggling"]:
+			_show_late(sim.guests[gid])
+			return
 	if not _reports.is_empty():
 		show_report(_reports.pop_front())
 
@@ -545,6 +562,29 @@ func _show_early(g) -> void:
 	if sim.early_fee > 0.0:
 		_button(row, ("Fee stands ($%d)" if haggling else "Yes, for a $%d fee") % int(sim.early_fee), func(): sim.resolve_early(gid, "fee"); close_modal())
 	_button(row, "Waive the fee" if haggling else "Yes, free", func(): sim.resolve_early(gid, "free"); close_modal())
+
+
+func _show_late(g) -> void:
+	var haggling: bool = g.late_state == "haggling"
+	var v := _open("late", "Late check-out" if not haggling else "Guest is haggling", false, 520)
+	var arch: String = sim.bal["archetypes"][g.archetype]["name"]
+	var until: String = sim.late_until_text(g)
+	if haggling:
+		_text(v, "%s (%s): \"Could you waive that $%d fee? It's only a little longer.\"" % [g.name, arch, int(sim.late_fee)])
+		_text(v, "Insisting on the fee might make them pay grudgingly, or just leave at the usual time, unhappy.", 13, Color(0.8, 0.8, 0.85))
+	else:
+		var when: String = "tomorrow morning" if sim.day() < g.checkout_day else "this morning"
+		_text(v, "%s (%s) in room %d calls the desk: they check out %s and would like to stay until %s." % [g.name, arch, g.room + 1, when, until])
+		_text(v, "A late check-out makes guests happier and a fee earns money, but room %d can't be cleaned until they leave, and check-in opens at 3 PM." % [g.room + 1], 13, Color(0.8, 0.8, 0.85))
+	_text(v, "Fun fact: this guest %s." % g.quirk, 13, Color(0.75, 0.75, 0.8))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	v.add_child(row)
+	var gid: int = g.id
+	_button(row, "No, usual time", func(): sim.resolve_late(gid, "no"); close_modal())
+	if sim.late_fee > 0.0:
+		_button(row, ("Fee stands ($%d)" if haggling else "Yes, for a $%d fee") % int(sim.late_fee), func(): sim.resolve_late(gid, "fee"); close_modal())
+	_button(row, "Waive the fee" if haggling else "Yes, free", func(): sim.resolve_late(gid, "free"); close_modal())
 
 
 func show_game_over(text: String) -> void:

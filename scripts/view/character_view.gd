@@ -67,7 +67,10 @@ func sync_guest(g, sim) -> void:
 			_bubble = "%d%% OFF?" % g.discount_pct
 			_bubble_color = Color(1.0, 0.85, 0.3)
 		"staying":
-			if g.asleep:
+			if g.late_state in ["asking", "haggling"]:
+				_bubble = "LATE?"
+				_bubble_color = Color(0.7, 0.9, 1.0)
+			elif g.asleep:
 				# The body is drawn by the bed sprite; just float some z's above the pillow.
 				_mood = -1.0
 				_bubble = ["z", "z z", "z z z"][int(sim.time / 20.0) % 3]

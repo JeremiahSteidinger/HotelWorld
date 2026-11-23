@@ -30,6 +30,7 @@ var time := 0.0
 var cash := 0.0
 var rates := {}
 var early_fee := 20.0   # player-set early check-in fee
+var late_fee := 25.0    # player-set late check-out fee
 var rooms: Array = []
 var guests := {}        # id -> Guest
 var workers: Array = []
@@ -71,6 +72,7 @@ func new_game(balance: Dictionary, game_mode := "campaign", seed_value := -1) ->
 	for t in bal["room_types"]:
 		rates[t] = float(bal["room_types"][t]["default_rate"])
 	early_fee = float(bal["early_checkin"]["default_fee"])
+	late_fee = float(bal["late_checkout"]["default_fee"])
 	rooms = []
 	var types: Array = bal["rooms"]
 	for i in types.size():
@@ -285,6 +287,103 @@ func _back_to_line(g) -> void:
 	_release_desk_for(g)
 	g.state = "queue"
 	queue.push_front(g.id)
+
+
+# --------------------------------------------------------------------------- late check-out
+
+func pending_late() -> Array:
+	var out := []
+	for gid in guests:
+		if guests[gid].late_state in ["asking", "haggling"]:
+			out.append(guests[gid])
+	return out
+
+
+func set_late_fee(value: float) -> void:
+	late_fee = clampf(roundf(value), 0.0, 200.0)
+
+
+func late_until_text(g) -> String:
+	var m := int(g.late_until)
+	var h := (m / 60) % 12
+	return "%d:%02d %s" % [12 if h == 0 else h, m % 60, "AM" if m < 720 else "PM"]
+
+
+## Decide (at check-in) whether this guest will ask for a late check-out, when they'll ask
+## (the evening before or the morning of check-out day) and how late they'd like to stay.
+func _plan_late_checkout(g) -> void:
+	var l: Dictionary = bal["late_checkout"]
+	g.late_state = ""
+	if rng.randf() >= l["want_chance"].get(g.archetype, 0.0):
+		return
+	# Ask to stay until a half-hour slot past the usual check-out deadline, never past max_hour.
+	var base: float = l["deadline_hour"] * 60.0
+	var slots := int((l["max_hour"] * 60.0 - base) / 30.0)
+	if slots < 1:
+		return
+	g.late_until = base + 30.0 * rng.randi_range(1, slots)
+	var checkout_day_start: float = (g.checkout_day - 1) * MIN_PER_DAY
+	var evening: float = checkout_day_start - MIN_PER_DAY + rng.randf_range(l["evening_start_hour"] * 60.0, bedtime(g) - 15.0)
+	var morning: float = checkout_day_start + rng.randf_range(wake_minute(g), maxf(wake_minute(g), g.checkout_minute - 10.0))
+	g.late_ask_time = evening if rng.randf() < 0.5 and evening > time + 20.0 else morning
+	g.late_state = "planned"
+
+
+## A staying guest may call the desk now: it's their ask time, they're awake, and it's
+## either the evening before check-out or check-out morning before the deadline.
+func _late_ask_window(g) -> bool:
+	if time < g.late_ask_time or is_sleep_time(g):
+		return false
+	var m := minute_of_day()
+	if day() == g.checkout_day:
+		return m < bal["late_checkout"]["deadline_hour"] * 60.0
+	return day() == g.checkout_day - 1 and m >= bal["late_checkout"]["evening_start_hour"] * 60.0
+
+
+## Player's answer to a late check-out request. choice: "no", "fee" or "free".
+func resolve_late(guest_id: int, choice: String) -> void:
+	if not guests.has(guest_id):
+		return
+	var g = guests[guest_id]
+	if g.late_state not in ["asking", "haggling"]:
+		return
+	var l: Dictionary = bal["late_checkout"]
+	var haggling: bool = g.late_state == "haggling"
+	match choice:
+		"free":
+			g.note("late_checkout", l["free_bonus"])
+			_grant_late(g)
+			_event("info", "%s can stay until %s, free of charge." % [g.name, late_until_text(g)], {"guest": g.id})
+		"fee":
+			if late_fee <= 0.0:
+				resolve_late(guest_id, "free")
+				return
+			if not haggling and rng.randf() < l["haggle_chance"].get(g.archetype, 0.5):
+				g.late_state = "haggling"
+				g.late_timer = 0.0
+				_event("late", "%s asks if you could waive the $%d late check-out fee." % [g.name, int(late_fee)], {"guest": g.id})
+				return
+			g.late_state = "done"
+			if haggling and rng.randf() > l["pay_after_insist_chance"].get(g.archetype, 0.5):
+				g.note("late_fee", l["declined_fee_mood"])
+				_event("angry", "%s won't pay the late check-out fee and will leave on time." % g.name, {"guest": g.id})
+				return
+			g.note("late_checkout", l["paid_bonus"])
+			g.note("late_fee", -late_fee * l["fee_mood_per_dollar"] + (l["insist_mood"] if haggling else 0.0))
+			g.late_fee = late_fee
+			cash += late_fee
+			ledger["revenue"] += late_fee
+			_grant_late(g)
+			_event("info", "%s paid $%d to stay until %s." % [g.name, int(late_fee), late_until_text(g)], {"guest": g.id})
+		_:
+			g.late_state = "done"
+			g.note("no_late", l["refuse_mood"])
+			_event("info", "%s will check out at the usual time." % g.name)
+
+
+func _grant_late(g) -> void:
+	g.late_state = "done"
+	g.checkout_minute = maxf(g.checkout_minute, g.late_until)
 
 
 func free_rooms_for(room_type: String) -> int:
@@ -587,6 +686,20 @@ func _update_guest(g, dt: float) -> void:
 				g.state = "staying"
 				rooms[g.room].state = "occupied"
 		"staying":
+			if g.late_state == "planned" and _late_ask_window(g):
+				g.late_state = "asking"
+				g.late_timer = 0.0
+				g.asleep = false
+				_event("late", "%s called the desk to ask for a late check-out (until %s)." % [g.name, late_until_text(g)], {"guest": g.id})
+			if g.late_state in ["asking", "haggling"]:
+				# Waiting on the phone for an answer; they won't leave before hearing back.
+				g.late_timer += dt
+				if g.late_timer > bal["late_checkout"]["timeout"]:
+					_event("info", "Nobody answered %s's call about a late check-out." % g.name)
+					resolve_late(g.id, "no")
+				else:
+					_go(g, Layout.room_stay_spot(g.room))
+					return
 			if day() > g.checkout_day or (day() == g.checkout_day and minute_of_day() >= g.checkout_minute):
 				g.asleep = false
 				_start_checkout(g)
@@ -764,6 +877,7 @@ func _finish_checkin(g) -> void:
 	stats["served"] += 1
 	g.wait = 0.0
 	_release_desk_for(g)
+	_plan_late_checkout(g)
 	var r = rooms[g.room]
 	if r.state == "clean":
 		g.state = "to_room"
@@ -1020,7 +1134,7 @@ func _refresh_candidates() -> void:
 
 func to_save() -> Dictionary:
 	var data := {
-		"version": SAVE_VERSION, "mode": mode, "time": time, "cash": cash, "rates": rates, "early_fee": early_fee,
+		"version": SAVE_VERSION, "mode": mode, "time": time, "cash": cash, "rates": rates, "early_fee": early_fee, "late_fee": late_fee,
 		"queue": queue, "stations": stations, "reviews": reviews, "arrivals": arrivals,
 		"candidates": candidates, "ledger": ledger, "reports": reports, "stats": stats,
 		"next_id": next_id, "neg_days": neg_days, "game_over": game_over, "rng_state": rng.state,
@@ -1038,6 +1152,7 @@ func from_save(balance: Dictionary, data: Dictionary) -> void:
 		set(k, data[k])
 	rng.state = data["rng_state"]
 	early_fee = data.get("early_fee", float(bal["early_checkin"]["default_fee"]))
+	late_fee = data.get("late_fee", float(bal["late_checkout"]["default_fee"]))
 	rooms = data["rooms"].map(func(d): return dict_to_inst(d))
 	workers = data["workers"].map(func(d): return dict_to_inst(d))
 	guests = {}

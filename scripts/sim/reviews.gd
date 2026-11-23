@@ -43,6 +43,18 @@ const TEXT := {
 		"Charged me extra just to sleep a bit sooner. Nickel-and-dimed.",
 		"Early check-in fee? For a motel? Bold move.",
 	],
+	"late_checkout": [
+		"They let us sleep in and check out late. Best morning of the whole trip.",
+		"Late check-out, no fuss. I finished my waffle in peace.",
+	],
+	"no_late": [
+		"Asked for one extra hour in the morning. The answer was a firm 'no'.",
+		"No late check-out. Packed my bags at a sprint like it was a game show.",
+	],
+	"late_fee": [
+		"Charged me to stay an extra hour. The clock ticks, and so does the meter.",
+		"Late check-out fee at a roadside motel? The sign didn't mention that.",
+	],
 	"got_discount": [
 		"Rough start, but the owner made it right with a discount. Classy.",
 		"Things went wrong, but they took care of us. Respect.",
@@ -69,8 +81,8 @@ const TEXT := {
 	],
 }
 
-const GOOD_CAUSES := ["great_value", "fast_service", "got_discount", "early_checkin"]
-const BAD_CAUSES := ["long_wait", "room_not_ready", "overpriced", "refused_discount", "walked_out", "left_checkout", "no_early", "early_fee"]
+const GOOD_CAUSES := ["great_value", "fast_service", "got_discount", "early_checkin", "late_checkout"]
+const BAD_CAUSES := ["long_wait", "room_not_ready", "overpriced", "refused_discount", "walked_out", "left_checkout", "no_early", "early_fee", "no_late", "late_fee"]
 
 
 static func stars_for_mood(mood: float) -> int:
