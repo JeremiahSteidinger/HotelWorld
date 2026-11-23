@@ -12,18 +12,22 @@ var shots := [
 	# [frame, label, minutes to fast-forward before the shot, action]
 	[20, "start_menu", 0.0, ""],
 	[40, "day1_morning", 0.0, "new_game"],
-	[80, "day1_afternoon", 420.0, ""],
-	[100, "night", 520.0, ""],
-	[120, "day2_checkout", 560.0, ""],
-	[160, "staff_panel", 0.0, "staff"],
-	[200, "rates_panel", 0.0, "rates"],
-	[240, "reviews_panel", 0.0, "reviews"],
-	[280, "day_report", 0.0, "report"],
-	[320, "discount", 0.0, "discount"],
-	[360, "no_vacancy", 0.0, "fill"],
-	[400, "early_ask", 0.0, "early"],
-	[440, "early_haggle", 0.0, "haggle"],
-	[480, "late_ask", 0.0, "late"],
+	[60, "day1_afternoon", 420.0, ""],
+	[80, "night", 520.0, ""],
+	[100, "day2_checkout", 560.0, ""],
+	[120, "staff_panel", 0.0, "staff"],
+	[160, "bank", 0.0, "bank"],
+	[200, "day_report", 0.0, "report"],
+	[240, "discount", 0.0, "discount"],
+	[280, "chapter2", 0.0, "chapter"],
+	[320, "properties", 0.0, "properties"],
+	[360, "hotel", 600.0, "buy"],
+	[400, "hotel_evening", 600.0, ""],
+	[440, "hotel_staff", 0.0, "staff"],
+	[480, "two_property_report", 900.0, "report2"],
+	[520, "motel_from_hotel", 0.0, "motel"],
+	[560, "hotel_night", 780.0, "hotel_view"],
+	[600, "late_checkout", 0.0, "late"],
 ]
 
 
@@ -49,67 +53,96 @@ func _process(_delta: float) -> bool:
 	return false
 
 
+func _ff(minutes: float, strategy := "pro") -> void:
+	var game = main.game
+	var target: float = game.time + minutes
+	while game.time < target:
+		Bot.play(game, strategy)
+		game.tick(2.0)
+	game.pop_events()
+	main.ui._reports.clear()
+	main.ui._discounts.clear()
+	main.ui._chapters.clear()
+
+
 func _act(action: String, minutes: float) -> void:
 	var ui = main.ui
+	var game = main.game
 	match action:
 		"new_game":
 			main.new_game("campaign")
 		"staff":
 			ui.close_modal()
-			main.sim.cash += 0
 			ui.show_staff()
-		"rates":
-			ui.show_rates()
-		"reviews":
-			ui.show_reviews()
-		"report":
-			if not main.sim.reports.is_empty():
-				ui.show_report(main.sim.reports[-1])
-		"early", "haggle":
+		"bank":
+			game.borrow(2000.0)
+			game.pop_events()
+			ui.show_bank()
+		"report", "report2":
+			if action == "report2":
+				ui.close_modal()
+				_ff(minutes)
+				minutes = 0.0
+			if not game.reports.is_empty():
+				ui.show_report(game.reports[-1])
+		"chapter":
 			ui.close_modal()
-			for gid in main.sim.guests:
-				var g = main.sim.guests[gid]
-				if g.state == "staying":
-					g.state = "early_request"
-					g.early_state = "asking" if action == "early" else "haggling"
-					ui._show_early(g)
-					break
+			game.repay(game.loans[0]["id"], game.loans[0]["balance"])
+			game.cash = 9800.0
+			game.time = (game.day()) * 1440.0 - 1.0
+			game.tick(2.0)
+			game.pop_events()
+			ui._reports.clear()
+			ui._show_chapter(game.bal["campaign"]["chapters"][0]["win"])
+		"properties":
+			ui.close_modal()
+			ui.show_properties()
+		"buy":
+			ui.close_modal()
+			main.buy_property("hotel")
+			game.pop_events()
+			game.order_go(1)
+			game.owner_w.orders.append({"type": "desk", "prop": 1})
+		"motel":
+			ui.close_modal()
+			main.show_property(0)
+		"hotel_view":
+			ui.close_modal()
+			main.show_property(1)
 		"late":
 			ui.close_modal()
-			for gid in main.sim.guests:
-				var g = main.sim.guests[gid]
+			var p = main.sim
+			for gid in p.guests:
+				var g = p.guests[gid]
 				if g.state == "staying":
 					g.late_state = "asking"
 					g.late_until = 12.5 * 60.0
-					ui._show_late(g)
+					ui._show_late(p, g)
 					break
-		"fill":
-			ui.close_modal()
-			for r in main.sim.rooms:
-				if r.guest_id == -1:
-					r.guest_id = 999
 		"discount":
 			ui.close_modal()
-			for gid in main.sim.guests:
-				var g = main.sim.guests[gid]
+			var p = main.sim
+			for gid in p.guests:
+				var g = p.guests[gid]
 				if g.state == "staying":
 					g.discount_pct = 20
 					g.paid = 120
 					g.notes = {"long_wait": -30.0}
-					ui._show_discount(g)
+					ui._show_discount(p, g)
 					break
 	if minutes > 0.0:
 		ui.close_modal()
-		var sim = main.sim
-		var target: float = sim.time + minutes
-		while sim.time < target:
-			Bot.play(sim, "staffed")
-			sim.tick(2.0)
-		sim.pop_events()
-		ui._reports.clear()
-		ui._discounts.clear()
-		if sim.staff_count("housekeeper") == 0:
-			for i in sim.candidates.size():
-				if sim.candidates[i]["role"] == "housekeeper":
-					sim.hire(i)
-					break
+		if action == "buy":
+			# Let the bot staff the hotel, but keep the owner's trip to the hotel.
+			var game2 = main.game
+			var target: float = game2.time + minutes
+			while game2.time < target:
+				for p in game2.properties:
+					Bot._answer_guests(p, "pro")
+				Bot._staff_hotel(game2.properties[1])
+				game2.tick(2.0)
+			game2.pop_events()
+			ui._reports.clear()
+			ui._discounts.clear()
+		else:
+			_ff(minutes)

@@ -3,34 +3,164 @@
   "minutes_per_second": 6.0,
   "start_cash": 1500,
   "start_hour": 8,
+  "start_property": "motel",
+  "travel_minutes": 40,
   "walk_cells_per_minute": 2.0,
   "task_minutes": {
     "check_in": 6,
     "check_out": 4,
-    "clean": 45
+    "clean": 45,
+    "repair": 30,
+    "repair_owner": 60
   },
-  "room_types": {
-    "single": {
-      "name": "Single",
-      "default_rate": 60,
-      "upkeep": 8
+  "repair_parts_cost": 15,
+  "checkin_hour": 15,
+  "checkout_start_hour": 7,
+  "checkout_end_hour": 11,
+  "shifts": {
+    "day": {
+      "name": "Day",
+      "hours": [
+        7,
+        15
+      ]
     },
-    "double": {
-      "name": "Double",
-      "default_rate": 90,
-      "upkeep": 11
+    "evening": {
+      "name": "Evening",
+      "hours": [
+        15,
+        23
+      ]
+    },
+    "night": {
+      "name": "Night",
+      "hours": [
+        23,
+        7
+      ]
     }
   },
-  "rooms": [
-    "single",
-    "single",
-    "single",
-    "single",
-    "double",
-    "double"
-  ],
-  "base_upkeep": 30,
-  "max_line": 12,
+  "properties": {
+    "motel": {
+      "name": "Roadside Motel",
+      "layout": "motel",
+      "value": 20000,
+      "rooms": [
+        "single",
+        "single",
+        "single",
+        "single",
+        "double",
+        "double"
+      ],
+      "room_types": {
+        "single": {
+          "name": "Single",
+          "default_rate": 60,
+          "upkeep": 8,
+          "short": "S"
+        },
+        "double": {
+          "name": "Double",
+          "default_rate": 90,
+          "upkeep": 11,
+          "short": "D"
+        }
+      },
+      "base_upkeep": 30,
+      "base_arrivals": 6.5,
+      "max_line": 12,
+      "break_chance": 0.04,
+      "staff_max": {
+        "clerk": 3,
+        "housekeeper": 4,
+        "maintenance": 1
+      },
+      "archetypes": {
+        "budget": {},
+        "family": {},
+        "business": {}
+      }
+    },
+    "hotel": {
+      "name": "Maple Grove Hotel",
+      "layout": "hotel",
+      "price": 40000,
+      "value": 40000,
+      "chapter": 2,
+      "blurb": "14 rooms (Queen, King and Suites) with a real lobby and a three-person front desk. Rated 2.6 stars and a bit run down: some rooms are out of order.",
+      "first_room_number": 101,
+      "start_rating": 2.6,
+      "start_broken": 4,
+      "rooms": [
+        "queen",
+        "queen",
+        "queen",
+        "king",
+        "king",
+        "king",
+        "suite",
+        "queen",
+        "queen",
+        "queen",
+        "king",
+        "king",
+        "suite",
+        "suite"
+      ],
+      "room_types": {
+        "queen": {
+          "name": "Queen",
+          "short": "Q",
+          "default_rate": 80,
+          "upkeep": 10
+        },
+        "king": {
+          "name": "King",
+          "short": "K",
+          "default_rate": 115,
+          "upkeep": 13
+        },
+        "suite": {
+          "name": "Suite",
+          "short": "St",
+          "default_rate": 165,
+          "upkeep": 20
+        }
+      },
+      "base_upkeep": 80,
+      "base_arrivals": 16,
+      "max_line": 16,
+      "break_chance": 0.1,
+      "staff_max": {
+        "clerk": 6,
+        "housekeeper": 8,
+        "maintenance": 3
+      },
+      "archetypes": {
+        "budget": {
+          "room": "queen",
+          "budget": 78,
+          "weight": 0.2
+        },
+        "business": {
+          "room": "queen",
+          "budget": 108,
+          "weight": 0.35
+        },
+        "family": {
+          "room": "king",
+          "budget": 125,
+          "weight": 0.3
+        },
+        "couple": {
+          "room": "suite",
+          "budget": 175,
+          "weight": 0.15
+        }
+      }
+    }
+  },
   "archetypes": {
     "budget": {
       "name": "Budget Traveller",
@@ -58,10 +188,18 @@
       "nights_min": 1,
       "nights_max": 1,
       "weight": 0.25
+    },
+    "couple": {
+      "name": "Couple on a Getaway",
+      "room": "suite",
+      "budget": 175,
+      "patience": 50,
+      "nights_min": 1,
+      "nights_max": 3,
+      "weight": 0.0
     }
   },
   "demand": {
-    "base_arrivals": 6.5,
     "rating_base": 0.4,
     "rating_weight": 0.15,
     "arrival_start_hour": 13,
@@ -70,8 +208,6 @@
     "wtp_base": 0.7,
     "wtp_per_star": 0.12
   },
-  "checkout_start_hour": 7,
-  "checkout_end_hour": 11,
   "mood": {
     "start": 70,
     "wait_grace": 10,
@@ -90,30 +226,6 @@
     "refuse_mood": -15,
     "timeout": 30
   },
-  "staff": {
-    "housekeeper": {
-      "name": "Housekeeper",
-      "market_wage": 45,
-      "max": 4
-    },
-    "clerk": {
-      "name": "Front Desk Clerk",
-      "market_wage": 55,
-      "max": 2
-    },
-    "quit_factor": 0.6
-  },
-  "goal": {
-    "cash": 9000,
-    "days": 30,
-    "bankrupt_days": 3
-  },
-  "rating": {
-    "start": 3.0,
-    "window": 20,
-    "prior_weight": 5
-  },
-  "checkin_hour": 15,
   "early_checkin": {
     "_comment": "Guests who arrive before check-in time can ask to check in early if a clean room is free.",
     "default_fee": 20,
@@ -141,7 +253,8 @@
     "want_chance": {
       "budget": 0.15,
       "family": 0.25,
-      "business": 0.35
+      "business": 0.35,
+      "couple": 0.3
     },
     "evening_start_hour": 18,
     "deadline_hour": 11,
@@ -155,13 +268,70 @@
     "haggle_chance": {
       "budget": 0.7,
       "family": 0.5,
-      "business": 0.2
+      "business": 0.2,
+      "couple": 0.4
     },
     "pay_after_insist_chance": {
       "budget": 0.4,
       "family": 0.6,
-      "business": 0.9
+      "business": 0.9,
+      "couple": 0.7
     },
     "timeout": 30
+  },
+  "staff": {
+    "housekeeper": {
+      "name": "Housekeeper",
+      "market_wage": 45,
+      "default_shift": "day"
+    },
+    "clerk": {
+      "name": "Front Desk Clerk",
+      "market_wage": 55,
+      "default_shift": "evening"
+    },
+    "quit_factor": 0.6,
+    "maintenance": {
+      "name": "Maintenance Tech",
+      "market_wage": 60,
+      "default_shift": "day",
+      "applicants": 1
+    }
+  },
+  "bank": {
+    "_comment": "Rates are per day. Loans: up to loan_to_value x property value, minus what you already owe.",
+    "loan_to_value": 0.5,
+    "loan_rate": 0.004,
+    "loan_days": 30,
+    "mortgage_rate": 0.001,
+    "mortgage_days": 150,
+    "down_payment": 0.2
+  },
+  "rating": {
+    "start": 3.0,
+    "window": 20,
+    "prior_weight": 5
+  },
+  "campaign": {
+    "bankrupt_days": 3,
+    "chapters": [
+      {
+        "title": "Chapter 1: The Roadside Motel",
+        "type": "savings",
+        "amount": 9000,
+        "days": 30,
+        "goal": "Save ${amount} (cash minus loans) by day {days}.",
+        "win": "Chapter 1 complete: you saved $9,000! The Maple Grove Hotel down the highway is for sale. Open Properties to buy it."
+      },
+      {
+        "title": "Chapter 2: Moving Up",
+        "type": "net_worth",
+        "amount": 100000,
+        "days": 100,
+        "needs": "hotel",
+        "goal": "Own the Maple Grove Hotel and grow your net worth to ${amount} by day {days}.",
+        "win": "You built a two-property empire worth $100,000! More properties come in a future update. You can keep playing in sandbox mode."
+      }
+    ]
   }
 }
